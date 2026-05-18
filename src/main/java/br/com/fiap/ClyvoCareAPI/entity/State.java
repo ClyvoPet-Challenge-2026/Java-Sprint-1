@@ -18,5 +18,5 @@ public class State {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private String name;
-    private char uf;
+    private String uf;
 }
