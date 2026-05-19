@@ -8,12 +8,12 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 public record CityRequest(
-        @NotBlank
-        @Size(max = 100)
+        @NotBlank(message = "Name is mandatory")
+        @Size(max = 100, message = "Name must have a max of 100 characters")
         String name,
 
-        @NotNull
-        @Positive
+        @NotNull(message = "stateId is mandatory")
+        @Positive(message = "stateId must be a positive value")
         Long stateId
 ) {
     public City toEntity(State state) {
