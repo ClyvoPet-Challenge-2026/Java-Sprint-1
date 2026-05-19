@@ -1,5 +1,6 @@
 package br.com.fiap.ClyvoCareAPI.service;
 
+import br.com.fiap.ClyvoCareAPI.dto.StateRequest;
 import br.com.fiap.ClyvoCareAPI.entity.State;
 import br.com.fiap.ClyvoCareAPI.repository.StateRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,24 +19,29 @@ public class StateService {
     private final StateRepository stateRepository;
 
     @Cacheable("states")
-    public List<State> getAllStates() { return stateRepository.findAll(); }
+    public List<State> findAllStates() {
+        return stateRepository.findAll();
+    }
 
-    public State getStateById(Long id) {
+    public State findStateById(Long id) {
         return stateRepository.findById(id).orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, String.format("State with ID %d not found", id))
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        String.format("State with ID %d not found", id))
         );
     }
 
     // @Transactional
     @CacheEvict(value = "states", allEntries = true)
-    public State addState(State state) { return stateRepository.save(state); }
+    public State createState(StateRequest request) {
+        return stateRepository.save(request.toEntity());
+    }
 
     // @Transactional
     @CacheEvict(value = "states", allEntries = true)
-    public State updateState(Long id, State newState) {
-        State existing = getStateById(id);
-        existing.setName(newState.getName());
-        existing.setUf(newState.getUf());
+    public State updateState(Long id, StateRequest request) {
+        State existing = findStateById(id);
+        existing.setName(request.name());
+        existing.setUf(request.uf());
         return stateRepository.save(existing);
     }
 
@@ -43,7 +49,8 @@ public class StateService {
     @CacheEvict(value = "states", allEntries = true)
     public void deleteState(Long id) {
         if (!stateRepository.existsById(id)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, String.format("State with ID %d not found", id));
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    String.format("State with ID %d not found", id));
         }
         stateRepository.deleteById(id);
     }
