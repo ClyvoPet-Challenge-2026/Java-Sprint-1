@@ -20,12 +20,12 @@ public class CityService {
     private final StateService stateService;
 
     @Cacheable("cities")
-    public List<City> findAll() {
+    public List<City> findAllCities() {
         return cityRepository.findAll();
     }
 
     @Cacheable("cities")
-    public City findById(Long id) {
+    public City findCityById(Long id) {
         return cityRepository.findById(id).orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         String.format("City with ID %d not found", id))
@@ -33,22 +33,22 @@ public class CityService {
     }
 
     @CacheEvict(value = "cities", allEntries = true)
-    public City create(CityRequest request) {
-        State state = stateService.getStateById(request.stateId());
+    public City createCity(CityRequest request) {
+        State state = stateService.findStateById(request.stateId());
         return cityRepository.save(request.toEntity(state));
     }
 
     @CacheEvict(value = "cities", allEntries = true)
-    public City update(Long id, CityRequest request) {
-        City existing = findById(id);
-        State state = stateService.getStateById(request.stateId());
+    public City updateCity(Long id, CityRequest request) {
+        City existing = findCityById(id);
+        State state = stateService.findStateById(request.stateId());
         existing.setName(request.name());
         existing.setState(state);
         return cityRepository.save(existing);
     }
 
     @CacheEvict(value = "cities", allEntries = true)
-    public void delete(Long id) {
+    public void deleteCity(Long id) {
         if (!cityRepository.existsById(id)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND,
                     String.format("City with ID %d not found", id));

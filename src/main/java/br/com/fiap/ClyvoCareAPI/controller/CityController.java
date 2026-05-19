@@ -26,31 +26,31 @@ public class CityController {
 
     @GetMapping
     public List<CityResponse> findAll() {
-        return cityService.findAll().stream()
+        return cityService.findAllCities().stream()
                 .map(CityResponse::fromEntity)
                 .toList();
     }
 
     @GetMapping("/{id}")
     public CityResponse findById(@PathVariable Long id) {
-        return CityResponse.fromEntity(cityService.findById(id));
+        return CityResponse.fromEntity(cityService.findCityById(id));
     }
 
     @PostMapping
     public ResponseEntity<CityResponse> create(@RequestBody @Valid CityRequest request) {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(CityResponse.fromEntity(cityService.create(request)));
+                .body(CityResponse.fromEntity(cityService.createCity(request)));
     }
 
     @PutMapping("/{id}")
     public CityResponse update(@PathVariable Long id, @RequestBody @Valid CityRequest request) {
-        return CityResponse.fromEntity(cityService.update(id, request));
+        return CityResponse.fromEntity(cityService.updateCity(id, request));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
-        cityService.delete(id);
+        cityService.deleteCity(id);
         return ResponseEntity.noContent().build();
     }
 }
