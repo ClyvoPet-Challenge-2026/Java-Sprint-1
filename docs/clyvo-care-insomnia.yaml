@@ -1,0 +1,407 @@
+type: collection.insomnia.rest/5.0
+schema_version: "5.1"
+name: ClyvoCareJava
+meta:
+  id: wrk_1409bfc6de26433281242a9ad7bb7ad0
+  created: 1779317141069
+  modified: 1779317141069
+  description: ""
+collection:
+  - name: 01-Estados
+    meta:
+      id: fld_a46ddca136454094b0a37da2f97193bf
+      created: 1779317475389
+      modified: 1779317475389
+      sortKey: -1779317475390
+      description: ""
+    children:
+      - url: "{{ _['base_url '].base_url }}/estados"
+        name: PostEstado
+        meta:
+          id: req_2bf8ba1b537048aa998f0842f4026eb5
+          created: 1779317724966
+          modified: 1779318369991
+          isPrivate: false
+          description: ""
+          sortKey: -1779317724966
+        method: POST
+        body:
+          mimeType: application/json
+          text: '{ "name": "São Paulo", "uf": "SP" }'
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: User-Agent
+            value: insomnia/12.5.0
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: 02-Cidades
+    meta:
+      id: fld_bb89cea414054396bd30909a966ef051
+      created: 1779317484674
+      modified: 1779317484674
+      sortKey: -1779317484674
+      description: ""
+    children:
+      - url: "{{ _['base_url '].base_url }}/cidades"
+        name: PostCidade
+        meta:
+          id: req_c70598370bf9473dbb571b44fbd6a8e0
+          created: 1779317795485
+          modified: 1779318339262
+          isPrivate: false
+          description: ""
+          sortKey: -1779317795485
+        method: POST
+        body:
+          mimeType: application/json
+          text: '{ "name": "Pederneiras", "stateId": 1 }'
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: User-Agent
+            value: insomnia/12.5.0
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: 03-Especies
+    meta:
+      id: fld_c4d9f4679ae643368df00413c307891c
+      created: 1779317494130
+      modified: 1779317494130
+      sortKey: -1779317494130
+      description: ""
+    children:
+      - url: "{{ _['base_url '].base_url }}/especies"
+        name: PostEspecie
+        meta:
+          id: req_bee5b05559e34ea3be8ba4bc3dc78403
+          created: 1779317846251
+          modified: 1779318415820
+          isPrivate: false
+          description: ""
+          sortKey: -1779317846251
+        method: POST
+        body:
+          mimeType: application/json
+          text: '{ "name": "Felino" }'
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: User-Agent
+            value: insomnia/12.5.0
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: 04-Raças
+    meta:
+      id: fld_145c25cc94de44c29db3be8b6555f917
+      created: 1779317502380
+      modified: 1779317502380
+      sortKey: -1779317502380
+      description: ""
+    children:
+      - url: "{{ _['base_url '].base_url }}/racas"
+        name: PostEspecie
+        meta:
+          id: req_5cc3909856c84549a4b075850b962f45
+          created: 1779317889878
+          modified: 1779318509907
+          isPrivate: false
+          description: ""
+          sortKey: -1779317889878
+        method: POST
+        body:
+          mimeType: application/json
+          text: ' { "name": "SRD(SEM-RAÇA-DEFINIDA)", "speciesId": 1 }'
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: User-Agent
+            value: insomnia/12.5.0
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: 05-Planos
+    meta:
+      id: fld_9a5d3b1ecc624b9a97f8c040e4cc8761
+      created: 1779317509241
+      modified: 1779317509241
+      sortKey: -1779317509241
+      description: ""
+    children:
+      - url: "{{ _['base_url '].base_url }}/planos"
+        name: PostPlano
+        meta:
+          id: req_f0567439b24649a0950148884475a323
+          created: 1779317919100
+          modified: 1779318520095
+          isPrivate: false
+          description: ""
+          sortKey: -1779317919100
+        method: POST
+        body:
+          mimeType: application/json
+          text: '{ "name": "Ouro", "monthlyValue": 119.90 }'
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: User-Agent
+            value: insomnia/12.5.0
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: 06-FormasDePagamento
+    meta:
+      id: fld_59f66095e4f744f48e9dfadd4766820c
+      created: 1779317520830
+      modified: 1779317520830
+      sortKey: -1779317520830
+      description: ""
+    children:
+      - url: "{{ _['base_url '].base_url }}/formas-pagamento"
+        name: PostFormaPagPix
+        meta:
+          id: req_976cd5fed76746349086c1e7c44fb600
+          created: 1779317948232
+          modified: 1779318532304
+          isPrivate: false
+          description: ""
+          sortKey: -1779317948232
+        method: POST
+        body:
+          mimeType: application/json
+          text: ' { "name": "Pix" }'
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: User-Agent
+            value: insomnia/12.5.0
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: 07-StatusContratação
+    meta:
+      id: fld_a1b2576950f7438cbe3d7138d6a0f696
+      created: 1779317535675
+      modified: 1779317535675
+      sortKey: -1779317535675
+      description: ""
+    children:
+      - url: "{{ _['base_url '].base_url }}/status-contratacao"
+        name: PostStatusContratacao
+        meta:
+          id: req_7131e5dff5c548fdb657ac4dfcdb6889
+          created: 1779317975508
+          modified: 1779318539993
+          isPrivate: false
+          description: ""
+          sortKey: -1779317975508
+        method: POST
+        body:
+          mimeType: application/json
+          text: '{ "name": "ATIVO" }'
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: User-Agent
+            value: insomnia/12.5.0
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: 08-Responsaveis
+    meta:
+      id: fld_ce9a6ab8598245a3acd1f602d88b364d
+      created: 1779317544629
+      modified: 1779317544629
+      sortKey: -1779317544629
+      description: ""
+    children:
+      - url: "{{ _['base_url '].base_url }}/responsaveis"
+        name: PostResponsavel
+        meta:
+          id: req_04087a1699a0401abb63beacf13b8d01
+          created: 1779318008493
+          modified: 1779318546471
+          isPrivate: false
+          description: ""
+          sortKey: -1779318008493
+        method: POST
+        body:
+          mimeType: application/json
+          text: |2-
+             {
+                "name": "Orlando Gonçalves",
+                "cpf": "390.533.447-05",
+                "email": "orlando@email.com",
+                "password": "Doidera123",
+                "phone": "(11) 98765-4321",
+                "cityId": 1
+              }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: User-Agent
+            value: insomnia/12.5.0
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: 09-Pets
+    meta:
+      id: fld_da642232f8ae4f3eb5a7b5084f936616
+      created: 1779317550467
+      modified: 1779317550467
+      sortKey: -1779317550467
+      description: ""
+    children:
+      - url: "{{ _['base_url '].base_url }}/pets"
+        name: PostPet
+        meta:
+          id: req_c3e535af6ab44b279ae0a0a2023b79a2
+          created: 1779318086894
+          modified: 1779318562960
+          isPrivate: false
+          description: ""
+          sortKey: -1779318086894
+        method: POST
+        body:
+          mimeType: application/json
+          text: |2-
+              {
+                "name": "Miwi",
+                "birthDate": "2012-03-15",
+                "sex": "FEMALE",
+                "ownerId": 1,
+                "speciesId": 1,
+                "breedId": 1
+              }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: User-Agent
+            value: insomnia/12.5.0
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: 10-Contratações
+    meta:
+      id: fld_237b3c878c1b4ee48c7fb1922e061ec7
+      created: 1779317557103
+      modified: 1779317557103
+      sortKey: -1779317557103
+      description: ""
+    children:
+      - url: "{{ _['base_url '].base_url }}/contratacoes"
+        name: PostContratacao
+        meta:
+          id: req_c55b1ad98c9a4c80a51f295553593273
+          created: 1779318142675
+          modified: 1779318571797
+          isPrivate: false
+          description: ""
+          sortKey: -1779318142675
+        method: POST
+        body:
+          mimeType: application/json
+          text: |2-
+              {
+                "petId": 1,
+                "planId": 1,
+                "statusId": 1,
+                "paymentMethodId": 1
+              }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: User-Agent
+            value: insomnia/12.5.0
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+cookieJar:
+  name: Default Jar
+  meta:
+    id: jar_1a092bd0ed2726bf89426f8404e3431063cceed2
+    created: 1779317141076
+    modified: 1779317141076
+environments:
+  name: Base Environment
+  meta:
+    id: env_1a092bd0ed2726bf89426f8404e3431063cceed2
+    created: 1779317141074
+    modified: 1779318314415
+    isPrivate: false
+  data:
+    "base_url ":
+      base_url: http://localhost:8080
