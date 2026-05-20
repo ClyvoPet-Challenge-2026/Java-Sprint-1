@@ -20,7 +20,7 @@ public class SubStatusService {
         return subStatusRepository.findAll();
     }
 
-    public SubStatus findAllSubStatusById(Long id) {
+    public SubStatus findSubStatusById(Long id) {
         return subStatusRepository.findById(id).orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         String.format("SubscriptionStatus with ID %d not found", id))
@@ -32,7 +32,7 @@ public class SubStatusService {
     }
 
     public SubStatus updateSubStatus(Long id, SubStatusRequest request) {
-        SubStatus existing = findAllSubStatusById(id);
+        SubStatus existing = findSubStatusById(id);
         existing.setName(request.name());
         return subStatusRepository.save(existing);
     }
