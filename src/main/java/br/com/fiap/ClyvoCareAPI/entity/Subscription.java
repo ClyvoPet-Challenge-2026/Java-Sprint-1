@@ -13,7 +13,7 @@ import java.time.LocalDate;
 @Entity
 @Data
 @Builder
-@Table(name = "TB_CAD_CONTRATACAO")
+@Table(name = "TB_CAD_SUBSCRIPTION")
 @AllArgsConstructor
 @NoArgsConstructor
 public class Subscription {

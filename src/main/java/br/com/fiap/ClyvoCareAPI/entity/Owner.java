@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 @Entity
 @Data
 @Builder
-@Table(name = "TB_CAD_RESPONSAVEL")
+@Table(name = "TB_CAD_OWNER")
 @AllArgsConstructor
 @NoArgsConstructor
 public class Owner {

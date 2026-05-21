@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @Data
 @Builder
-@Table(name = "TB_CAD_RACA")
+@Table(name = "TB_CAD_BREED")
 @AllArgsConstructor
 @NoArgsConstructor
 public class Breed {

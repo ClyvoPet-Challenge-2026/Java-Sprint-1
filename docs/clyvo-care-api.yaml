@@ -20,7 +20,7 @@ collection:
         meta:
           id: req_2bf8ba1b537048aa998f0842f4026eb5
           created: 1779317724966
-          modified: 1779318369991
+          modified: 1779367252770
           isPrivate: false
           description: ""
           sortKey: -1779317724966
@@ -200,14 +200,14 @@ collection:
         meta:
           id: req_976cd5fed76746349086c1e7c44fb600
           created: 1779317948232
-          modified: 1779318532304
+          modified: 1779368474418
           isPrivate: false
           description: ""
           sortKey: -1779317948232
         method: POST
         body:
           mimeType: application/json
-          text: ' { "name": "Pix" }'
+          text: ' { "name": "Credito" }'
         headers:
           - name: Content-Type
             value: application/json
@@ -360,7 +360,7 @@ collection:
         meta:
           id: req_c55b1ad98c9a4c80a51f295553593273
           created: 1779318142675
-          modified: 1779318571797
+          modified: 1779361896254
           isPrivate: false
           description: ""
           sortKey: -1779318142675

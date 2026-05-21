@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @Data
 @Builder
-@Table(name = "TB_CAD_STATUS_CONTRATACAO")
+@Table(name = "TB_CAD_SUB_STATUS")
 @AllArgsConstructor
 @NoArgsConstructor
 public class SubStatus {

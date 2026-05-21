@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @Data
 @Builder
-@Table(name = "TB_CAD_FORMA_PAGAMENTO")
+@Table(name = "TB_CAD_PAYMENT_METHOD")
 @AllArgsConstructor
 @NoArgsConstructor
 public class PaymentMethod {
