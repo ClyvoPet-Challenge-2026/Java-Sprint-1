@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @Data
 @Builder
-@Table(name = "TB_CAD_CIDADE")
+@Table(name = "TB_CAD_CITY")
 @AllArgsConstructor
 @NoArgsConstructor
 public class City {

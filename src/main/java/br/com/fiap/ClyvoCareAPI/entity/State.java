@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @Data
 @Builder
-@Table(name = "TB_CAD_ESTADO")
+@Table(name = "TB_CAD_STATE")
 @AllArgsConstructor
 @NoArgsConstructor
 public class State {
