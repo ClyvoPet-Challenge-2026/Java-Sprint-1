@@ -35,3 +35,6 @@ build/
 ### Windows ###
 desktop.ini
 Thumbs.db
+
+### Docker ###
+docker-compose.yml
