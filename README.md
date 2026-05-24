@@ -478,13 +478,3 @@ O banco é criado automaticamente pelo Hibernate na primeira inicialização (`d
 - **Migrations não automatizadas.** O schema é criado via `ddl-auto=update`. Em produção, usaríamos Flyway ou Liquibase.
 
 ---
-
-## Próximos passos
-
-- Autenticação via JWT
-- Auditoria de mudanças (quem alterou o quê e quando)
-- Soft delete em entidades sensíveis (Owner, Pet)
-- Migrations versionadas (Flyway)
-- Profile de teste com banco em memória para CI
-- Métricas (Actuator + Prometheus)
-- Pipeline CI/CD via GitHub Actions
