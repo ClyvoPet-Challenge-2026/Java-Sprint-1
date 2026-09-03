@@ -45,7 +45,10 @@ public class OwnerService {
         }
         City city = cityService.findCityById(request.cityId());
         String hashedPassword = BCrypt.hashpw(request.password(), BCrypt.gensalt());
-        return ownerRepository.save(request.toEntity(city, hashedPassword));
+        Owner owner = request.toEntity(city, hashedPassword);
+        owner.setRoleName("OWNER");
+        owner.setEnabled(true);
+        return ownerRepository.save(owner);
     }
 
     public Owner updateOwner(Long id, OwnerRequest request) {
