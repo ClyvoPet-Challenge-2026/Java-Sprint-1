@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -42,6 +43,7 @@ public class PlanController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Cria um novo plano")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Plano criado"),
@@ -54,6 +56,7 @@ public class PlanController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Atualiza um plano existente")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Plano atualizado"),
@@ -65,6 +68,7 @@ public class PlanController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Remove um plano")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Plano removido"),
