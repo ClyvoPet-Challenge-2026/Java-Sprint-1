@@ -15,6 +15,7 @@ O projeto tem uma irmã em C# (.NET Advanced) que cuida da operação clínica e
 - [Como executar localmente](#como-executar-localmente)
 - [Como executar na nuvem (Azure + Docker)](#como-executar-na-nuvem-azure--docker)
 - [Arquitetura da aplicação](#arquitetura-da-aplicação)
+- [Autenticação e Autorização](#autenticação-e-autorização)
 - [Endpoints principais](#endpoints-principais)
 - [Testando localmente](#testando-localmente)
 - [Estrutura de pastas](#estrutura-de-pastas)
@@ -54,7 +55,9 @@ A API C# escreve em `TB_CAD_CLINIC`, `TB_HEA_CLINICAL_EVENT` e `TB_HEA_REMINDER`
 | Driver JDBC        | ojdbc11                                                       |
 | Validação          | Bean Validation (Hibernate Validator + extensões BR para CPF) |
 | Cache              | Spring Cache (in-memory)                                      |
-| Segurança de senha | jBCrypt (BCrypt standalone)                                   |
+| Migrations         | Flyway                                                        |
+| Autenticação       | JWT stateless assinado com RSA (RS256), via Spring Security   |
+| Segurança de senha | Spring Security (`BCryptPasswordEncoder`)                     |
 | Documentação       | SpringDoc OpenAPI (Swagger UI)                                |
 | Boilerplate        | Lombok                                                        |
 | Build              | Maven                                                         |
@@ -120,16 +123,17 @@ Usuário / Browser / Insomnia
 
 Pré-requisitos no ambiente:
 
-- Java 23 instalado e disponível no `PATH`
+- Java 17 instalado e disponível no `PATH`
+- OpenSSL instalado (para gerar as chaves JWT)
 - Acesso à VPN da FIAP (necessário para alcançar `oracle.fiap.com.br`)
 - Credenciais do banco Oracle FIAP (RM e senha)
-- Schema da FIAP populado executando o arquivo `docs/fix.sql` no SQL Developer logado com seu RM
+- Schema Oracle acessível com o seu RM — o Flyway cria as 15 tabelas sozinho se estiver vazio; rode `docs/script.sql` se quiser dados de demonstração (ver [Schema do banco](#schema-do-banco))
 
-Configuração de credenciais. Abra `src/main/resources/application.properties` e preencha:
+Gere o par de chaves RSA usado para assinar o JWT (não são versionadas — cada ambiente gera a sua):
 
-```properties
-spring.datasource.username=SEU_RM_AQUI
-spring.datasource.password=SUA_SENHA_AQUI
+```bash
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out src/main/resources/keys/private_key.pem
+openssl rsa -pubout -in src/main/resources/keys/private_key.pem -out src/main/resources/keys/public_key.pem
 ```
 
 Rodando a aplicação:
@@ -271,7 +275,7 @@ Controller (REST)  -->  Service (lógica + cache + validação de FK)  -->  Repo
 
 A regra prática: o Controller só conhece DTOs (Request e Response), o Service trabalha com entidades JPA e regras de negócio, o Repository fala com o banco. A conversão entre DTO e Entity acontece nas bordas (`request.toEntity(...)` na entrada, `Response.fromEntity(entity)` na saída), seguindo um padrão de records imutáveis.
 
-**Senhas com BCrypt.** Toda senha de tutor passa pelo `BCrypt.hashpw` antes de ser salva. O campo `passwordHash` da entidade tem `@JsonIgnore`, então mesmo se alguém esquecer de filtrar no DTO, a senha nunca vaza no JSON de resposta.
+**Senhas com BCrypt.** Toda senha de tutor passa pelo `PasswordEncoder` do Spring Security (`BCryptPasswordEncoder`) antes de ser salva. O campo `passwordHash` da entidade tem `@JsonIgnore`, então mesmo se alguém esquecer de filtrar no DTO, a senha nunca vaza no JSON de resposta.
 
 **Cache nas listagens estáveis.** Estados e Cidades são marcados com `@Cacheable`. Quando alguém faz POST/PUT/DELETE nesses recursos, `@CacheEvict` limpa tudo. Para entidades de negócio (Owner, Pet, Subscription) não usamos cache porque o volume de mudanças é maior e o risco de servir dado stale supera o benefício.
 
@@ -286,9 +290,52 @@ A regra prática: o Controller só conhece DTOs (Request e Response), o Service 
 
 ---
 
+## Autenticação e Autorização
+
+A API usa **JWT stateless** (sem sessão/cookie), via Spring Security + OAuth2 Resource Server. A escolha é deliberada: o frontend roda em repositório e domínio separados, e sessão/cookie exige mesma origem — o token no header `Authorization` não tem essa restrição.
+
+O JWT é assinado com **RSA (RS256)**: a API guarda um par de chaves em `src/main/resources/keys/`, o `AuthController` assina com a privada no login, e o `SecurityConfig` valida com a pública em cada request. As chaves não são versionadas — cada ambiente gera o próprio par (ver [Como executar localmente](#como-executar-localmente)).
+
+### Login
+
+```
+POST /auth/login
+Content-Type: application/json
+
+{
+    "email": "carlos@email.com",
+    "password": "senha123"
+}
+```
+
+Resposta:
+
+```json
+{ "token": "eyJhbGciOiJSUzI1NiJ9..." }
+```
+
+Use o token nas próximas requisições: `Authorization: Bearer <token>`.
+
+### Perfis e proteção de rotas
+
+`TB_CAD_OWNER.ROLE_NAME` guarda o perfil do tutor (`ADMIN` ou `OWNER`). O token carrega esse valor na claim `role`; o Spring Security o expõe como a authority `ROLE_ADMIN` / `ROLE_OWNER`, e cada endpoint declara quem pode acessá-lo via `@PreAuthorize`.
+
+| Recurso | GET | POST | PUT | DELETE |
+|---|---|---|---|---|
+| `/responsaveis` | ADMIN | público (auto-cadastro) | ADMIN | ADMIN |
+| `/pets` | qualquer logado | ADMIN ou OWNER | ADMIN ou OWNER | ADMIN ou OWNER |
+| `/contratacoes` | qualquer logado | ADMIN ou OWNER | ADMIN | ADMIN |
+| Lookups (planos, formas de pagamento, estados, cidades, espécies, raças, status) | qualquer logado | ADMIN | ADMIN | ADMIN |
+
+`/auth/login` e o Swagger (`/swagger-ui/**`, `/v3/api-docs/**`) são as únicas rotas públicas, além do `POST /responsaveis`.
+
+> CORS ainda não está configurado — ver [Limitações conhecidas](#limitações-conhecidas).
+
+---
+
 ## Endpoints principais
 
-Documentação completa interativa está no Swagger UI em `http://localhost:8080/swagger-ui.html`.
+Documentação completa interativa está no Swagger UI em `http://localhost:8080/swagger-ui.html`. Exceto `POST /auth/login` e `POST /responsaveis`, todo endpoint abaixo exige `Authorization: Bearer <token>` (ver [Autenticação e Autorização](#autenticação-e-autorização)).
 
 ### Cadastro de um responsável (tutor do pet)
 
@@ -384,7 +431,7 @@ A pasta `docs/` contém:
 
 - `clyvo-care-api.yaml` — collection completa do Insomnia
 - `MER.png` — diagrama entidade-relacionamento
-- `fix.sql` — script completo de criação do schema Oracle
+- `script.sql` — schema de referência (15 tabelas) + seeds de demonstração + PL/SQL da disciplina de Database
 - `Arquitetura_DevOps.drawio` — diagrama de arquitetura na nuvem
 
 Para um teste end-to-end rápido:
@@ -414,37 +461,52 @@ Java-Sprint-1/
 ├── mvnw / mvnw.cmd
 ├── docs/
 │   ├── clyvo-care-api.yaml
-│   ├── fix.sql
+│   ├── script.sql
 │   ├── MER.png
 │   └── Arquitetura_DevOps.drawio
-└── src/main/java/br/com/fiap/ClyvoCareAPI/
-    ├── ClyvoCareApiApplication.java
-    ├── config/
-    │   └── OpenApiConfig.java
-    ├── controller/
-    │   └── (um por entidade)
-    ├── service/
-    │   └── (um por entidade)
-    ├── repository/
-    │   └── (um por entidade)
-    ├── entity/
-    │   └── (entidades JPA)
-    ├── dto/
-    │   └── (XxxRequest + XxxResponse records)
-    └── validation/
-        └── ValidationHandler.java
+└── src/main/
+    ├── java/br/com/fiap/ClyvoCareAPI/
+    │   ├── ClyvoCareApiApplication.java
+    │   ├── auth/
+    │   │   ├── SecurityConfig.java
+    │   │   ├── AuthService.java
+    │   │   ├── TokenService.java
+    │   │   └── AuthController.java
+    │   ├── config/
+    │   │   └── OpenApiConfig.java
+    │   ├── controller/
+    │   │   └── (um por entidade)
+    │   ├── service/
+    │   │   └── (um por entidade)
+    │   ├── repository/
+    │   │   └── (um por entidade)
+    │   ├── entity/
+    │   │   └── (entidades JPA)
+    │   ├── dto/
+    │   │   └── (XxxRequest + XxxResponse records)
+    │   └── validation/
+    │       └── ValidationHandler.java
+    └── resources/
+        ├── application.properties
+        ├── db/migration/
+        │   └── V1__create_baseline_schema.sql
+        └── keys/
+            └── (private_key.pem / public_key.pem — gerados localmente, não versionados)
 ```
 
 ---
 
 ## Schema do banco
 
-O banco é criado automaticamente pelo Hibernate na primeira inicialização (`ddl-auto=update`). O arquivo `docs/fix.sql` contém o schema completo para uso com o Oracle FIAP:
+O schema é versionado por **Flyway**, não pelo Hibernate. `src/main/resources/db/migration/V1__create_baseline_schema.sql` espelha as 15 tabelas do projeto (cadastro + saúde + log de erros). `spring.jpa.hibernate.ddl-auto=validate` — o Hibernate só confere se as entidades batem com o schema, nunca altera o banco.
 
-- DDL das 14 tabelas (cadastro + saúde + log de erros)
-- 13 stored procedures de inserção com tratamento de exceção
-- Carga de dados de exemplo (8 estados, 12 cidades, 4 espécies, 12 raças, 5 planos, etc)
-- Blocos de análise PL/SQL (joins, LAG/LEAD, cursores explícitos com decisão)
+No banco da FIAP (já existente e populado) o Flyway faz **baseline** na versão 1 em vez de recriar as tabelas (`baseline-on-migrate=true`); num schema vazio, ele cria as 15 tabelas do zero.
+
+O arquivo `docs/script.sql` é a referência completa (cópia do entregável da disciplina de Database) e serve pra popular dados de demonstração:
+
+- DDL das 15 tabelas (idêntico ao `V1__create_baseline_schema.sql`)
+- Carga de dados de exemplo (8 estados, 12 cidades, 4 espécies, 12 raças, 6 planos, 8 tutores, etc — senha de todos: `senha123`)
+- Procedures, functions e trigger de auditoria da disciplina de Database (não usados pelo Java via JPA)
 
 ---
 
@@ -468,13 +530,19 @@ O banco é criado automaticamente pelo Hibernate na primeira inicialização (`d
 - Volume nomeado `java-sprint-1_oracle-data` garantindo persistência dos dados
 - Arquitetura macro documentada em `docs/Arquitetura_DevOps.drawio`
 
+### Java Advanced — Sprint 3
+- **Flyway**: `V1__create_baseline_schema.sql` versiona as 15 tabelas; `baseline-on-migrate` preserva o banco existente da FIAP; `ddl-auto=validate`
+- **Spring Security**: autenticação JWT stateless (RSA/RS256), 2 perfis (`ADMIN`/`OWNER`) via `TB_CAD_OWNER.ROLE_NAME`, rotas protegidas por perfil com `@PreAuthorize`
+- 2 fluxos não-CRUD com regra de negócio (contratação de plano com desconto por forma de pagamento; ciclo de vida da assinatura) — em desenvolvimento
+
 ---
 
 ## Limitações conhecidas
 
-- **Sem autenticação.** A API não tem login implementado. O `passwordHash` é guardado corretamente, mas não há endpoint `/login` nem token JWT. Decisão consciente: escopo da disciplina foca em REST/JPA.
 - **docker-compose.yml não versionado.** Por segurança, o arquivo está no `.gitignore`. O script `azure-setup.sh` o cria automaticamente na VM durante o provisionamento.
 - **Validação de FK entre APIs não acontece em tempo real.** O Oracle resolve via constraints, mas a UX em casos de borda não é polida.
-- **Migrations não automatizadas.** O schema é criado via `ddl-auto=update`. Em produção, usaríamos Flyway ou Liquibase.
+- **CORS ainda não configurado.** Pendente da URL do deploy do frontend (repositório separado).
+- **Sem ownership-scoping.** Um `OWNER` autenticado lista/consulta todos os pets e contratações, não só os seus — as regras de perfil (`ADMIN`/`OWNER`) valem por rota, não por dono do recurso.
+- **Java 17 no `pom.xml`, Java 23 no `Dockerfile`.** Inconsistência herdada da conteinerização; a build local usa 17, a imagem Docker usa 23. Decisão de qual usar ainda em aberto.
 
 ---

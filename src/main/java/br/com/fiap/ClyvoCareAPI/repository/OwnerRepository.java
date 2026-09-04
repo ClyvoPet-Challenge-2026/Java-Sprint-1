@@ -7,11 +7,15 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Optional;
+
 public interface OwnerRepository extends JpaRepository<Owner, Long> {
 
     boolean existsByCpf(String cpf);
 
     boolean existsByEmail(String email);
+
+    Optional<Owner> findByEmail(String email);
 
     @Query("SELECT o FROM Owner o WHERE " +
             "(:name IS NULL OR LOWER(o.name) LIKE LOWER(CONCAT('%', :name, '%'))) AND " +

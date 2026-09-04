@@ -10,6 +10,7 @@ public record OwnerResponse(
         String cpf,
         String email,
         String phone,
+        String roleName,
         CityResponse city,
         LocalDateTime createdAt
 ) {
@@ -20,6 +21,7 @@ public record OwnerResponse(
                 owner.getCpf(),
                 owner.getEmail(),
                 owner.getPhone(),
+                owner.getRoleName(),
                 CityResponse.fromEntity(owner.getCity()),
                 owner.getCreatedAt()
         );

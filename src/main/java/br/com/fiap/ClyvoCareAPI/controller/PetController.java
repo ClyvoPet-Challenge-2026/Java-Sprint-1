@@ -13,6 +13,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -46,6 +47,7 @@ public class PetController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @Operation(summary = "Cadastra um novo pet (raça é opcional para vira-latas)")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Pet criado"),
@@ -59,6 +61,7 @@ public class PetController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @Operation(summary = "Atualiza um pet existente")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Pet atualizado"),
@@ -70,6 +73,7 @@ public class PetController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @Operation(summary = "Remove um pet")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Pet removido"),

@@ -13,6 +13,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -46,6 +47,7 @@ public class SubscriptionController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @Operation(summary = "Cria uma nova contratação. O contractedValue é derivado do Plan.monthlyValue, não pode ser enviado")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Contratação criada"),
@@ -59,6 +61,7 @@ public class SubscriptionController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Atualiza uma contratação. Trocar plano também recalcula contractedValue")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Contratação atualizada"),
@@ -70,6 +73,7 @@ public class SubscriptionController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Remove uma contratação")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Contratação removida"),

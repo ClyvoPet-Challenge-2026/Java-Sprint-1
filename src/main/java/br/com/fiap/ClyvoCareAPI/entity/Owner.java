@@ -7,6 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.type.YesNoConverter;
 
 import java.time.LocalDateTime;
 
@@ -32,6 +33,13 @@ public class Owner {
 
     @JsonIgnore
     private String passwordHash;
+
+    @Column(name = "ROLE_NAME", nullable = false)
+    private String roleName;
+
+    @Column(name = "ENABLED", nullable = false)
+    @Convert(converter = YesNoConverter.class)
+    private boolean enabled;
 
     private String phone;
 

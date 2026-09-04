@@ -5,10 +5,10 @@ import br.com.fiap.ClyvoCareAPI.entity.City;
 import br.com.fiap.ClyvoCareAPI.entity.Owner;
 import br.com.fiap.ClyvoCareAPI.repository.OwnerRepository;
 import lombok.RequiredArgsConstructor;
-import org.mindrot.jbcrypt.BCrypt;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -17,8 +17,8 @@ import org.springframework.web.server.ResponseStatusException;
 public class OwnerService {
     private final OwnerRepository ownerRepository;
     private final CityService cityService;
+    private final PasswordEncoder passwordEncoder;
 
-    //Não vai ser usado pois owner teria muitos cadastros.
     public Page<Owner> findAllOwners(Pageable pageable) {
         return ownerRepository.findAll(pageable);
     }
@@ -44,8 +44,11 @@ public class OwnerService {
                     String.format("Email %s is already registered", request.email()));
         }
         City city = cityService.findCityById(request.cityId());
-        String hashedPassword = BCrypt.hashpw(request.password(), BCrypt.gensalt());
-        return ownerRepository.save(request.toEntity(city, hashedPassword));
+        String hashedPassword = passwordEncoder.encode(request.password());
+        Owner owner = request.toEntity(city, hashedPassword);
+        owner.setRoleName("OWNER");
+        owner.setEnabled(true);
+        return ownerRepository.save(owner);
     }
 
     public Owner updateOwner(Long id, OwnerRequest request) {
@@ -56,7 +59,7 @@ public class OwnerService {
         existing.setEmail(request.email());
         existing.setPhone(request.phone());
         existing.setCity(city);
-        existing.setPasswordHash(BCrypt.hashpw(request.password(), BCrypt.gensalt()));
+        existing.setPasswordHash(passwordEncoder.encode(request.password()));
         return ownerRepository.save(existing);
     }
 
