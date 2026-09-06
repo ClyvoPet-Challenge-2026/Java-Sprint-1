@@ -13,6 +13,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -23,6 +24,7 @@ public class OwnerController {
     private final OwnerService ownerService;
 
     @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Lista responsáveis com paginação e filtros opcionais por nome, CPF e email")
     public Page<OwnerResponse> findAll(
             @RequestParam(required = false) String name,
@@ -35,6 +37,7 @@ public class OwnerController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Busca responsável por ID")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Responsável encontrado"),
@@ -59,6 +62,7 @@ public class OwnerController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Atualiza um responsável existente (senha é re-hasheada)")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Responsável atualizado"),
@@ -70,6 +74,7 @@ public class OwnerController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Remove um responsável")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Responsável removido"),

@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -42,6 +43,7 @@ public class BreedController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Cria uma nova raça vinculada a uma espécie existente")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Raça criada"),
@@ -55,6 +57,7 @@ public class BreedController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Atualiza uma raça existente")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Raça atualizada"),
@@ -66,6 +69,7 @@ public class BreedController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Remove uma raça")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Raça removida"),

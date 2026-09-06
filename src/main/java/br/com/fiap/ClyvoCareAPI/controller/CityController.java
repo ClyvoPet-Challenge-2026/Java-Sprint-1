@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -41,6 +42,7 @@ public class CityController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Cria uma nova cidade vinculada a um estado existente")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Cidade criada"),
@@ -54,6 +56,7 @@ public class CityController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Atualiza uma cidade existente")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Cidade atualizada"),
@@ -65,6 +68,7 @@ public class CityController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Remove uma cidade")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Cidade removida"),

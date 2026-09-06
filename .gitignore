@@ -35,3 +35,9 @@ build/
 ### Windows ###
 desktop.ini
 Thumbs.db
+
+### Docker ###
+docker-compose.yml
+
+### Chaves JWT (geradas localmente - ver src/main/resources/keys/README.md) ###
+/src/main/resources/keys/*.pem

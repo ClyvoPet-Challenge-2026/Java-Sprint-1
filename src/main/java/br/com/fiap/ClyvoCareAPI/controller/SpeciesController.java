@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -42,6 +43,7 @@ public class SpeciesController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Cria uma nova espécie")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Espécie criada"),
@@ -54,6 +56,7 @@ public class SpeciesController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Atualiza uma espécie existente")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Espécie atualizada"),
@@ -65,6 +68,7 @@ public class SpeciesController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Remove uma espécie")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Espécie removida"),

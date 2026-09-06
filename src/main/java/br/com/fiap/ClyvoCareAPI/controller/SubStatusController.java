@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -42,6 +43,7 @@ public class SubStatusController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Cria um novo status de contratação")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Status criado"),
@@ -54,6 +56,7 @@ public class SubStatusController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Atualiza um status existente")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Status atualizado"),
@@ -65,6 +68,7 @@ public class SubStatusController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Remove um status")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Status removido"),
