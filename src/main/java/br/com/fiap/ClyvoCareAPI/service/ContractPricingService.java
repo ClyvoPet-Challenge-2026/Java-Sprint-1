@@ -1,10 +1,10 @@
 package br.com.fiap.ClyvoCareAPI.service;
 
+import br.com.fiap.ClyvoCareAPI.entity.PaymentMethod;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.Locale;
 import java.util.Map;
 
 @Service
@@ -12,18 +12,18 @@ public class ContractPricingService {
 
     private static final int MONEY_SCALE = 2;
     private static final BigDecimal PIX_DISCOUNT_RATE = new BigDecimal("0.05");
-    private static final BigDecimal AUTO_DEBIT_DISCOUNT_RATE = new BigDecimal("0.03");
-    private static final Map<String, BigDecimal> DISCOUNT_RATES = Map.of(
-            "PIX", PIX_DISCOUNT_RATE,
-            "AUTO DEBIT", AUTO_DEBIT_DISCOUNT_RATE
+    private static final BigDecimal DEBIT_CARD_DISCOUNT_RATE = new BigDecimal("0.03");
+    private static final Map<PaymentMethod, BigDecimal> DISCOUNT_RATES = Map.of(
+            PaymentMethod.PIX, PIX_DISCOUNT_RATE,
+            PaymentMethod.DEBIT_CARD, DEBIT_CARD_DISCOUNT_RATE
     );
 
-    public PriceCalculation calculate(BigDecimal baseValue, String paymentMethodName) {
-        validate(baseValue, paymentMethodName);
+    public PriceCalculation calculate(BigDecimal baseValue, PaymentMethod paymentMethod) {
+        validate(baseValue, paymentMethod);
 
         BigDecimal normalizedBaseValue = baseValue.setScale(MONEY_SCALE, RoundingMode.HALF_UP);
         BigDecimal discountRate = DISCOUNT_RATES.getOrDefault(
-                normalizePaymentMethodName(paymentMethodName),
+                paymentMethod,
                 BigDecimal.ZERO
         );
         BigDecimal finalValue = normalizedBaseValue
@@ -41,20 +41,16 @@ public class ContractPricingService {
         );
     }
 
-    private void validate(BigDecimal baseValue, String paymentMethodName) {
+    private void validate(BigDecimal baseValue, PaymentMethod paymentMethod) {
         if (baseValue == null) {
             throw new IllegalArgumentException("Base value is mandatory");
         }
         if (baseValue.signum() <= 0) {
             throw new IllegalArgumentException("Base value must be positive");
         }
-        if (paymentMethodName == null || paymentMethodName.isBlank()) {
-            throw new IllegalArgumentException("Payment method name is mandatory");
+        if (paymentMethod == null) {
+            throw new IllegalArgumentException("Payment method is mandatory");
         }
-    }
-
-    private String normalizePaymentMethodName(String paymentMethodName) {
-        return paymentMethodName.strip().toUpperCase(Locale.ROOT);
     }
 
     public record PriceCalculation(

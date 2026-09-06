@@ -27,10 +27,12 @@ public class Subscription {
     @ManyToOne
     private Plan plan;
 
-    @ManyToOne
-    private SubStatus status;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "STATUS", nullable = false, length = 20)
+    private SubscriptionStatus status;
 
-    @ManyToOne
+    @Enumerated(EnumType.STRING)
+    @Column(name = "PAYMENT_METHOD", nullable = false, length = 20)
     private PaymentMethod paymentMethod;
 
     @CreationTimestamp

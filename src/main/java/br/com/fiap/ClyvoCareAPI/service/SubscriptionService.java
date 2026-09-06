@@ -4,7 +4,7 @@ import br.com.fiap.ClyvoCareAPI.dto.SubscriptionRequest;
 import br.com.fiap.ClyvoCareAPI.entity.PaymentMethod;
 import br.com.fiap.ClyvoCareAPI.entity.Pet;
 import br.com.fiap.ClyvoCareAPI.entity.Plan;
-import br.com.fiap.ClyvoCareAPI.entity.SubStatus;
+import br.com.fiap.ClyvoCareAPI.entity.SubscriptionStatus;
 import br.com.fiap.ClyvoCareAPI.entity.Subscription;
 import br.com.fiap.ClyvoCareAPI.repository.SubscriptionRepository;
 import lombok.RequiredArgsConstructor;
@@ -20,11 +20,9 @@ public class SubscriptionService {
     private final SubscriptionRepository subscriptionRepository;
     private final PetService petService;
     private final PlanService planService;
-    private final SubStatusService subStatusService;
-    private final PaymentMethodService paymentMethodService;
 
-    public Page<Subscription> searchSubscriptions(Long petId, Long planId, Long statusId, Long paymentMethodId, Pageable pageable) {
-        return subscriptionRepository.search(petId, planId, statusId, paymentMethodId, pageable);
+    public Page<Subscription> searchSubscriptions(Long petId, Long planId, SubscriptionStatus status, PaymentMethod paymentMethod, Pageable pageable) {
+        return subscriptionRepository.search(petId, planId, status, paymentMethod, pageable);
     }
 
     public Subscription findSubscriptionById(Long id) {
@@ -37,21 +35,17 @@ public class SubscriptionService {
     public Subscription createSubscription(SubscriptionRequest request) {
         Pet pet = petService.findPetById(request.petId());
         Plan plan = planService.findPlanById(request.planId());
-        SubStatus status = subStatusService.findSubStatusById(request.statusId());
-        PaymentMethod paymentMethod = paymentMethodService.findPaymentMethodById(request.paymentMethodId());
-        return subscriptionRepository.save(request.toEntity(pet, plan, status, paymentMethod));
+        return subscriptionRepository.save(request.toEntity(pet, plan));
     }
 
     public Subscription updateSubscription(Long id, SubscriptionRequest request) {
         Subscription existing = findSubscriptionById(id);
         Pet pet = petService.findPetById(request.petId());
         Plan plan = planService.findPlanById(request.planId());
-        SubStatus status = subStatusService.findSubStatusById(request.statusId());
-        PaymentMethod paymentMethod = paymentMethodService.findPaymentMethodById(request.paymentMethodId());
         existing.setPet(pet);
         existing.setPlan(plan);
-        existing.setStatus(status);
-        existing.setPaymentMethod(paymentMethod);
+        existing.setStatus(request.status());
+        existing.setPaymentMethod(request.paymentMethod());
         existing.setContractedValue(plan.getMonthlyValue());
         return subscriptionRepository.save(existing);
     }

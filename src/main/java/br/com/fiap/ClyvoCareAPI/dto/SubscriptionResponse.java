@@ -1,6 +1,8 @@
 package br.com.fiap.ClyvoCareAPI.dto;
 
 import br.com.fiap.ClyvoCareAPI.entity.Subscription;
+import br.com.fiap.ClyvoCareAPI.entity.SubscriptionStatus;
+import br.com.fiap.ClyvoCareAPI.entity.PaymentMethod;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -11,8 +13,8 @@ public record SubscriptionResponse(
         BigDecimal contractedValue,
         PetResponse pet,
         PlanResponse plan,
-        SubStatusResponse status,
-        PaymentMethodResponse paymentMethod
+        SubscriptionStatus status,
+        PaymentMethod paymentMethod
 ) {
     public static SubscriptionResponse fromEntity(Subscription subscription) {
         return new SubscriptionResponse(
@@ -21,8 +23,8 @@ public record SubscriptionResponse(
                 subscription.getContractedValue(),
                 PetResponse.fromEntity(subscription.getPet()),
                 PlanResponse.fromEntity(subscription.getPlan()),
-                SubStatusResponse.fromEntity(subscription.getStatus()),
-                PaymentMethodResponse.fromEntity(subscription.getPaymentMethod())
+                subscription.getStatus(),
+                subscription.getPaymentMethod()
         );
     }
 }

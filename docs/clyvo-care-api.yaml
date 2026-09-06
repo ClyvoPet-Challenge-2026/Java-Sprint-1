@@ -196,7 +196,7 @@ collection:
       description: ""
     children:
       - url: "{{ _['base_url '].base_url }}/formas-pagamento"
-        name: PostFormaPagPix
+        name: GetFormasPagamento
         meta:
           id: req_976cd5fed76746349086c1e7c44fb600
           created: 1779317948232
@@ -204,10 +204,7 @@ collection:
           isPrivate: false
           description: ""
           sortKey: -1779317948232
-        method: POST
-        body:
-          mimeType: application/json
-          text: ' { "name": "Credito" }'
+        method: GET
         headers:
           - name: Content-Type
             value: application/json
@@ -232,7 +229,7 @@ collection:
       description: ""
     children:
       - url: "{{ _['base_url '].base_url }}/status-contratacao"
-        name: PostStatusContratacao
+        name: GetStatusContratacao
         meta:
           id: req_7131e5dff5c548fdb657ac4dfcdb6889
           created: 1779317975508
@@ -240,10 +237,7 @@ collection:
           isPrivate: false
           description: ""
           sortKey: -1779317975508
-        method: POST
-        body:
-          mimeType: application/json
-          text: '{ "name": "ATIVO" }'
+        method: GET
         headers:
           - name: Content-Type
             value: application/json
@@ -371,8 +365,8 @@ collection:
               {
                 "petId": 1,
                 "planId": 1,
-                "statusId": 1,
-                "paymentMethodId": 1
+                "status": "ACTIVE",
+                "paymentMethod": "PIX"
               }
         headers:
           - name: Content-Type

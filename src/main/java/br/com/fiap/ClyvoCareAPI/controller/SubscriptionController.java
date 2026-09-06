@@ -2,6 +2,8 @@ package br.com.fiap.ClyvoCareAPI.controller;
 
 import br.com.fiap.ClyvoCareAPI.dto.SubscriptionRequest;
 import br.com.fiap.ClyvoCareAPI.dto.SubscriptionResponse;
+import br.com.fiap.ClyvoCareAPI.entity.SubscriptionStatus;
+import br.com.fiap.ClyvoCareAPI.entity.PaymentMethod;
 import br.com.fiap.ClyvoCareAPI.service.SubscriptionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -28,11 +30,11 @@ public class SubscriptionController {
     public Page<SubscriptionResponse> findAll(
             @RequestParam(required = false) Long petId,
             @RequestParam(required = false) Long planId,
-            @RequestParam(required = false) Long statusId,
-            @RequestParam(required = false) Long paymentMethodId,
+            @RequestParam(required = false) SubscriptionStatus status,
+            @RequestParam(required = false) PaymentMethod paymentMethod,
             Pageable pageable
     ) {
-        return subscriptionService.searchSubscriptions(petId, planId, statusId, paymentMethodId, pageable)
+        return subscriptionService.searchSubscriptions(petId, planId, status, paymentMethod, pageable)
                 .map(SubscriptionResponse::fromEntity);
     }
 
@@ -52,7 +54,7 @@ public class SubscriptionController {
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Contratação criada"),
             @ApiResponse(responseCode = "400", description = "Erro de validação"),
-            @ApiResponse(responseCode = "404", description = "Pet, plano, status ou forma de pagamento não encontrado")
+            @ApiResponse(responseCode = "404", description = "Pet ou plano não encontrado")
     })
     public ResponseEntity<SubscriptionResponse> create(@RequestBody @Valid SubscriptionRequest request) {
         return ResponseEntity

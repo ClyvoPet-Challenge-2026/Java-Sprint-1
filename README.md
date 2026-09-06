@@ -38,7 +38,7 @@ Esta API (Java) é dona de escrita das seguintes tabelas:
 - `TB_CAD_SUBSCRIPTION` — contratações de plano feitas pelos tutores
 - `TB_CAD_SPECIES`, `TB_CAD_BREED` — taxonomia de espécies e raças
 - `TB_CAD_STATE`, `TB_CAD_CITY` — localização
-- `TB_CAD_PAYMENT_METHOD`, `TB_CAD_SUB_STATUS` — lookups de domínio
+Status e forma de pagamento são enums armazenados nas colunas `STATUS` e `PAYMENT_METHOD` de `TB_CAD_SUBSCRIPTION`, sem tabelas auxiliares.
 
 A API C# escreve em `TB_CAD_CLINIC`, `TB_HEA_CLINICAL_EVENT` e `TB_HEA_REMINDER`, e lê algumas das tabelas acima quando precisa.
 
@@ -127,7 +127,7 @@ Pré-requisitos no ambiente:
 - OpenSSL instalado (para gerar as chaves JWT)
 - Acesso à VPN da FIAP (necessário para alcançar `oracle.fiap.com.br`)
 - Credenciais do banco Oracle FIAP (RM e senha)
-- Schema Oracle acessível com o seu RM — o Flyway cria as 15 tabelas sozinho se estiver vazio; rode `docs/script.sql` se quiser dados de demonstração (ver [Schema do banco](#schema-do-banco))
+- Schema Oracle acessível com o seu RM — o Flyway aplica V1 + V2 em um banco vazio; `docs/script.sql` recria o schema com 13 tabelas e dados de demonstração (ver [Schema do banco](#schema-do-banco))
 
 Gere o par de chaves RSA usado para assinar o JWT (não são versionadas — cada ambiente gera a sua):
 
@@ -155,6 +155,8 @@ Database dialect: OracleDialect
 ---
 
 ## Como executar na nuvem (Azure + Docker)
+
+> Estas instruções de VM são da Sprint 1. A entrega de DevOps da Sprint 3 exige ACR + ACI ou App Service, conforme o enunciado. O provisionamento ainda precisa ser adaptado.
 
 ### Pré-requisitos
 
@@ -325,11 +327,34 @@ Use o token nas próximas requisições: `Authorization: Bearer <token>`.
 | `/responsaveis` | ADMIN | público (auto-cadastro) | ADMIN | ADMIN |
 | `/pets` | qualquer logado | ADMIN ou OWNER | ADMIN ou OWNER | ADMIN ou OWNER |
 | `/contratacoes` | qualquer logado | ADMIN ou OWNER | ADMIN | ADMIN |
-| Lookups (planos, formas de pagamento, estados, cidades, espécies, raças, status) | qualquer logado | ADMIN | ADMIN | ADMIN |
+| Lookups (planos, estados, cidades, espécies, raças) | qualquer logado | ADMIN | ADMIN | ADMIN |
+| `/status-contratacao`, `/formas-pagamento` | qualquer logado | — | — | — |
 
 `/auth/login` e o Swagger (`/swagger-ui/**`, `/v3/api-docs/**`) são as únicas rotas públicas, além do `POST /responsaveis`.
 
 > CORS ainda não está configurado — ver [Limitações conhecidas](#limitações-conhecidas).
+
+---
+
+## Status e forma de pagamento
+
+Os dois campos usam `@Enumerated(EnumType.STRING)` e colunas `VARCHAR2(20)` na contratação, protegidas por constraints no Oracle:
+
+| Campo JSON / coluna Oracle | Enum Java | Valores |
+|---|---|---|
+| `status` / `STATUS` | `SubscriptionStatus` | `ACTIVE`, `INACTIVE`, `PENDING` |
+| `paymentMethod` / `PAYMENT_METHOD` | `PaymentMethod` | `CREDIT_CARD`, `DEBIT_CARD`, `BOLETO`, `PIX` |
+
+`ACTIVE` indica contratação ativa; `INACTIVE`, encerrada ou desativada; `PENDING`, aguardando confirmação ou regularização.
+
+- POST e PUT recebem os dois campos como strings, substituindo `statusId` e `paymentMethodId`. As respostas também devolvem strings.
+- Filtros: `GET /contratacoes?status=ACTIVE&paymentMethod=PIX`.
+- `GET /status-contratacao` e `GET /formas-pagamento` retornam listas fixas, sem consultar o banco. Essas rotas não possuem criação, edição, exclusão ou consulta por ID.
+- Campos ausentes, nulos, desconhecidos ou numéricos retornam HTTP 400.
+
+O cálculo em `ContractPricingService` e `FN_CALCULATE_CONTRACT_VALUE` mantém **5% para PIX e 3% para cartão de débito**; crédito e boleto não têm desconto. A integração desse cálculo ao cadastro e as regras de transição/troca de plano continuam como a próxima etapa dos fluxos de negócio. O CRUD atual ainda recebe o status no POST/PUT e usa o valor mensal do plano no cadastro.
+
+A V2 foi aplicada e validada no Oracle FIAP, preservando as 11 contratações existentes. A inicialização do Spring/Hibernate com o schema migrado também foi conferida.
 
 ---
 
@@ -384,8 +409,8 @@ Content-Type: application/json
 {
     "petId": 1,
     "planId": 1,
-    "statusId": 1,
-    "paymentMethodId": 1
+    "status": "ACTIVE",
+    "paymentMethod": "PIX"
 }
 ```
 
@@ -398,17 +423,17 @@ Content-Type: application/json
 {
     "petId": 1,
     "planId": 1,
-    "statusId": 2,
-    "paymentMethodId": 1
+    "status": "INACTIVE",
+    "paymentMethod": "PIX"
 }
 ```
 
 ### Filtros úteis em contratações
 
 ```
-GET /contratacoes?statusId=1        # todas ativas
+GET /contratacoes?status=ACTIVE        # todas ativas
 GET /contratacoes?petId=1           # histórico de contratações de um pet
-GET /contratacoes?planId=5&statusId=2  # cancelamentos do plano Total
+GET /contratacoes?planId=5&status=INACTIVE  # contratações inativas do plano Total
 ```
 
 ### Lookups (Estados, Cidades, Espécies, etc)
@@ -418,10 +443,10 @@ GET /contratacoes?planId=5&statusId=2  # cancelamentos do plano Total
 - `GET /especies`
 - `GET /racas`
 - `GET /planos`
-- `GET /formas-pagamento`
-- `GET /status-contratacao`
+- `GET /formas-pagamento` — lista fixa dos valores do enum; sem CRUD
+- `GET /status-contratacao` — lista fixa dos valores do enum; sem CRUD
 
-CRUD completo (POST, PUT, DELETE) também existe nessas rotas para operações administrativas.
+CRUD completo (POST, PUT, DELETE) existe nos lookups persistidos para operações administrativas. Os status e as formas de pagamento são fixos e possuem apenas consulta.
 
 ---
 
@@ -431,7 +456,7 @@ A pasta `docs/` contém:
 
 - `clyvo-care-api.yaml` — collection completa do Insomnia
 - `MER.png` — diagrama entidade-relacionamento
-- `script.sql` — schema de referência (15 tabelas) + seeds de demonstração + PL/SQL da disciplina de Database
+- `script.sql` — schema de referência (13 tabelas) + seeds de demonstração + PL/SQL da disciplina de Database
 - `Arquitetura_DevOps.drawio` — diagrama de arquitetura na nuvem
 
 Para um teste end-to-end rápido:
@@ -443,10 +468,10 @@ Para um teste end-to-end rápido:
 5. Crie uma Raça via `POST /racas` referenciando o `speciesId`
 6. Crie um Pet via `POST /pets` referenciando `ownerId`, `speciesId` e `breedId`
 7. Crie um Plano via `POST /planos`
-8. Crie uma Forma de Pagamento via `POST /formas-pagamento`
-9. Crie um Status via `POST /status-contratacao`
-10. Crie uma Contratação via `POST /contratacoes`
-11. Liste via `GET /contratacoes` e verifique a persistência
+8. Consulte os valores em `GET /formas-pagamento`
+9. Consulte os valores em `GET /status-contratacao`
+10. Crie uma Contratação via `POST /contratacoes` com `"status": "ACTIVE"` e `"paymentMethod": "PIX"`
+11. Liste via `GET /contratacoes?status=ACTIVE` e verifique a persistência
 
 ---
 
@@ -489,7 +514,8 @@ Java-Sprint-1/
     └── resources/
         ├── application.properties
         ├── db/migration/
-        │   └── V1__create_baseline_schema.sql
+        │   ├── V1__create_baseline_schema.sql
+        │   └── V2__subscription_enums.sql
         └── keys/
             └── (private_key.pem / public_key.pem — gerados localmente, não versionados)
 ```
@@ -498,22 +524,43 @@ Java-Sprint-1/
 
 ## Schema do banco
 
-O schema é versionado por **Flyway**, não pelo Hibernate. `src/main/resources/db/migration/V1__create_baseline_schema.sql` espelha as 15 tabelas do projeto (cadastro + saúde + log de erros). `spring.jpa.hibernate.ddl-auto=validate` — o Hibernate só confere se as entidades batem com o schema, nunca altera o banco.
+O schema é versionado por **Flyway**. A V1 histórica cria 15 tabelas e permanece inalterada para preservar os checksums já registrados. A `V2__subscription_enums.sql` converte `STATUS_ID` e `PAYMENT_METHOD_ID` em textos e remove as duas tabelas auxiliares, deixando **13 tabelas de aplicação**. O Hibernate usa `ddl-auto=validate`.
 
-No banco da FIAP (já existente e populado) o Flyway faz **baseline** na versão 1 em vez de recriar as tabelas (`baseline-on-migrate=true`); num schema vazio, ele cria as 15 tabelas do zero.
+- **Banco existente no modelo antigo:** a V2 preserva IDs, datas e valores das contratações. A conversão usa nomes dos cadastros antigos, sem fixar seus IDs.
+- **Banco vazio:** o Flyway aplica V1 e V2. Os dados de demonstração não fazem parte das migrations.
+- **Schema criado pelo `docs/script.sql` atual:** o Flyway registra baseline 1; a V2 reconhece as colunas textuais existentes e atualiza o PL/SQL.
+- **Schema legado anterior à V1:** a V2 também adiciona `ROLE_NAME`/`ENABLED` em tutores e a tabela de auditoria, se ausentes. Isso não substitui a conferência das demais tabelas antes de registrar o baseline.
+- Funções, relatórios e trigger são recompilados e verificados em `USER_ERRORS`. Se existir `SP_INSERT_SUBSCRIPTION`, seus parâmetros de status e pagamento passam a texto.
 
-O arquivo `docs/script.sql` é a referência completa (cópia do entregável da disciplina de Database) e serve pra popular dados de demonstração:
+| Dado antigo | Valor após a V2 |
+|---|---|
+| `ACTIVE`, `TRIAL` | `ACTIVE` |
+| `CANCELED`, `SUSPENDED`, `INACTIVE` | `INACTIVE` |
+| `OVERDUE`, `PENDING` | `PENDING` |
+| `Card`, `CREDIT CARD`, `CREDIT_CARD` | `CREDIT_CARD` |
+| `Auto Debit`, `DEBIT CARD`, `DEBIT_CARD` | `DEBIT_CARD` |
+| `Boleto`, `Pix` | `BOLETO`, `PIX` |
 
-- DDL das 15 tabelas (idêntico ao `V1__create_baseline_schema.sql`)
-- Carga de dados de exemplo (8 estados, 12 cidades, 4 espécies, 12 raças, 6 planos, 8 tutores, etc — senha de todos: `senha123`)
-- Procedures, functions e trigger de auditoria da disciplina de Database (não usados pelo Java via JPA)
+Valores já normalizados são mantidos. Contratações que usem outros nomes interrompem a V2 antes da conversão; cadastros antigos sem uso desaparecem com as tabelas auxiliares.
+
+O `docs/script.sql` é o script completo de **recriação** da demonstração: DDL de 13 tabelas, seeds e PL/SQL. Ele contém `DROP TABLE`; para atualizar um banco com dados a preservar, use o Flyway. O `docs/fix.sql` do .NET também foi ajustado aos dois enums; segue como referência histórica sem a tabela de auditoria.
+
+```sql
+SELECT FN_CALCULATE_CONTRACT_VALUE(1, 'DEBIT_CARD') FROM DUAL;
+
+BEGIN
+    SP_REPORT_SUBSCRIPTIONS_JSON('ACTIVE');
+    SP_REPORT_REVENUE_FACT;
+END;
+/
+```
 
 ---
 
 ## Requisitos da disciplina cobertos
 
 ### Java Advanced
-- CRUD completo das 10 entidades com retornos HTTP corretos (200, 201, 204, 400, 404, 409)
+- CRUD completo das 8 entidades com retornos HTTP corretos (200, 201, 204, 400, 404, 409)
 - Bean Validation com extensões brasileiras (`@CPF`, `@Email`, `@Size`, `@Positive`, `@PastOrPresent`)
 - Paginação e ordenação via `Pageable` em Owner, Pet e Subscription
 - Busca por parâmetros opcionais combinados
@@ -531,7 +578,7 @@ O arquivo `docs/script.sql` é a referência completa (cópia do entregável da 
 - Arquitetura macro documentada em `docs/Arquitetura_DevOps.drawio`
 
 ### Java Advanced — Sprint 3
-- **Flyway**: `V1__create_baseline_schema.sql` versiona as 15 tabelas; `baseline-on-migrate` preserva o banco existente da FIAP; `ddl-auto=validate`
+- **Flyway**: V1 histórica + V2 dos enums de status e pagamento; schema atual com 13 tabelas, conversão dos dados existentes e `ddl-auto=validate`
 - **Spring Security**: autenticação JWT stateless (RSA/RS256), 2 perfis (`ADMIN`/`OWNER`) via `TB_CAD_OWNER.ROLE_NAME`, rotas protegidas por perfil com `@PreAuthorize`
 - 2 fluxos não-CRUD com regra de negócio (contratação de plano com desconto por forma de pagamento; ciclo de vida da assinatura) — em desenvolvimento
 

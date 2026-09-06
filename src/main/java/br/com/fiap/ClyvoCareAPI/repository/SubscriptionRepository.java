@@ -1,6 +1,8 @@
 package br.com.fiap.ClyvoCareAPI.repository;
 
 import br.com.fiap.ClyvoCareAPI.entity.Subscription;
+import br.com.fiap.ClyvoCareAPI.entity.SubscriptionStatus;
+import br.com.fiap.ClyvoCareAPI.entity.PaymentMethod;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -12,11 +14,11 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, Long
     @Query("SELECT s FROM Subscription s WHERE " +
             "(:petId IS NULL OR s.pet.id = :petId) AND " +
             "(:planId IS NULL OR s.plan.id = :planId) AND " +
-            "(:statusId IS NULL OR s.status.id = :statusId) AND " +
-            "(:paymentMethodId IS NULL OR s.paymentMethod.id = :paymentMethodId)")
+            "(:status IS NULL OR s.status = :status) AND " +
+            "(:paymentMethod IS NULL OR s.paymentMethod = :paymentMethod)")
     Page<Subscription> search(@Param("petId") Long petId,
                               @Param("planId") Long planId,
-                              @Param("statusId") Long statusId,
-                              @Param("paymentMethodId") Long paymentMethodId,
+                              @Param("status") SubscriptionStatus status,
+                              @Param("paymentMethod") PaymentMethod paymentMethod,
                               Pageable pageable);
 }
