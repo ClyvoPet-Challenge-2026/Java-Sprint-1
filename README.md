@@ -124,12 +124,11 @@ Usuário / Browser / Insomnia
 Pré-requisitos no ambiente:
 
 - Java 17 instalado e disponível no `PATH`
-- OpenSSL instalado (para gerar as chaves JWT)
 - Acesso à VPN da FIAP (necessário para alcançar `oracle.fiap.com.br`)
 - Credenciais do banco Oracle FIAP (RM e senha)
 - Schema Oracle acessível com o seu RM — o Flyway aplica V1 + V2 em um banco vazio; `docs/script.sql` recria o schema com 13 tabelas e dados de demonstração (ver [Schema do banco](#schema-do-banco))
 
-Gere o par de chaves RSA usado para assinar o JWT (não são versionadas — cada ambiente gera a sua):
+O par de chaves RSA que assina o JWT já está versionado em `src/main/resources/keys/` (chaves de demonstração). Para um deploy real, gere um par novo (precisa de OpenSSL):
 
 ```bash
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out src/main/resources/keys/private_key.pem
@@ -296,7 +295,7 @@ A regra prática: o Controller só conhece DTOs (Request e Response), o Service 
 
 A API usa **JWT stateless** (sem sessão/cookie), via Spring Security + OAuth2 Resource Server. A escolha é deliberada: o frontend roda em repositório e domínio separados, e sessão/cookie exige mesma origem — o token no header `Authorization` não tem essa restrição.
 
-O JWT é assinado com **RSA (RS256)**: a API guarda um par de chaves em `src/main/resources/keys/`, o `AuthController` assina com a privada no login, e o `SecurityConfig` valida com a pública em cada request. As chaves não são versionadas — cada ambiente gera o próprio par (ver [Como executar localmente](#como-executar-localmente)).
+O JWT é assinado com **RSA (RS256)**: a API guarda um par de chaves em `src/main/resources/keys/`, o `AuthController` assina com a privada no login, e o `SecurityConfig` valida com a pública em cada request. O par versionado é de demonstração; para produção, gere um par novo e injete por variável de ambiente / secret.
 
 ### Login
 
@@ -606,7 +605,7 @@ Java-Sprint-1/
         │   ├── V1__create_baseline_schema.sql
         │   └── V2__subscription_enums.sql
         └── keys/
-            └── (private_key.pem / public_key.pem — gerados localmente, não versionados)
+            └── (private_key.pem / public_key.pem — par de demonstração que assina o JWT)
 ```
 
 ---
