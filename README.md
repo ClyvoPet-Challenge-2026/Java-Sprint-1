@@ -347,12 +347,16 @@ Os dois campos usam `@Enumerated(EnumType.STRING)` e colunas `VARCHAR2(20)` na c
 
 `ACTIVE` indica contratação ativa; `INACTIVE`, encerrada ou desativada; `PENDING`, aguardando confirmação ou regularização.
 
-- POST e PUT recebem os dois campos como strings, substituindo `statusId` e `paymentMethodId`. As respostas também devolvem strings.
+- POST e PUT recebem `petId`, `planId` e `paymentMethod`. O POST define `ACTIVE` no backend; o PUT preserva o status atual. As respostas incluem `status` e `paymentMethod` como strings.
 - Filtros: `GET /contratacoes?status=ACTIVE&paymentMethod=PIX`.
 - `GET /status-contratacao` e `GET /formas-pagamento` retornam listas fixas, sem consultar o banco. Essas rotas não possuem criação, edição, exclusão ou consulta por ID.
-- Campos ausentes, nulos, desconhecidos ou numéricos retornam HTTP 400.
+- IDs obrigatórios devem ser positivos. `paymentMethod` ausente, nulo, desconhecido ou numérico retorna HTTP 400; filtros de enum inválidos também retornam 400.
 
-O cálculo em `ContractPricingService` e `FN_CALCULATE_CONTRACT_VALUE` mantém **5% para PIX e 3% para cartão de débito**; crédito e boleto não têm desconto. A integração desse cálculo ao cadastro e as regras de transição/troca de plano continuam como a próxima etapa dos fluxos de negócio. O CRUD atual ainda recebe o status no POST/PUT e usa o valor mensal do plano no cadastro.
+`ContractPricingService` aplica **5% para PIX e 3% para cartão de débito**; crédito e boleto não têm desconto. O cálculo é compartilhado pela simulação, pelo cadastro e pelo PUT, com arredondamento monetário para duas casas. A função Oracle `FN_CALCULATE_CONTRACT_VALUE` segue as mesmas taxas.
+
+`POST /contratacoes/simulacao` retorna o preço do plano, a taxa e o valor do desconto e o preço final, sem criar contratação. Na confirmação, o backend consulta novamente o preço do plano e grava o valor calculado.
+
+Um pet pode ter apenas uma contratação `ACTIVE` criada por esse fluxo. POST e PUT validam duplicidade sob bloqueio do pet dentro de uma transação; conflito retorna HTTP 409. Ao atualizar uma contratação ativa, a consulta exclui o próprio registro. As regras de transição de status e o endpoint específico de troca de plano continuam para a próxima feature.
 
 A V2 foi aplicada e validada no Oracle FIAP, preservando as 11 contratações existentes. A inicialização do Spring/Hibernate com o schema migrado também foi conferida.
 
@@ -400,6 +404,32 @@ Content-Type: application/json
 }
 ```
 
+### Simulação antes de contratar
+
+```http
+POST /contratacoes/simulacao
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+    "planId": 1,
+    "paymentMethod": "PIX"
+}
+```
+
+Para um plano de R$ 69,90, a resposta HTTP 200 é:
+
+```json
+{
+    "baseValue": 69.90,
+    "discountRate": 0.05,
+    "discountAmount": 3.49,
+    "finalValue": 66.41
+}
+```
+
+A simulação e a criação são permitidas para `ADMIN` e `OWNER` autenticados.
+
 ### Contratação de um plano
 
 ```
@@ -409,12 +439,13 @@ Content-Type: application/json
 {
     "petId": 1,
     "planId": 1,
-    "status": "ACTIVE",
     "paymentMethod": "PIX"
 }
 ```
 
-### Trocar status de uma contratação
+A criação retorna HTTP 201 com status `ACTIVE` e o preço calculado. Se o pet já tiver contratação ativa, retorna HTTP 409.
+
+### Atualizar uma contratação
 
 ```
 PUT /contratacoes/1
@@ -423,10 +454,11 @@ Content-Type: application/json
 {
     "petId": 1,
     "planId": 1,
-    "status": "INACTIVE",
     "paymentMethod": "PIX"
 }
 ```
+
+O PUT exige `ADMIN`, preserva o status e recalcula o preço conforme plano e pagamento informados. A alteração de status terá uma operação própria na próxima feature.
 
 ### Filtros úteis em contratações
 
@@ -454,12 +486,14 @@ CRUD completo (POST, PUT, DELETE) existe nos lookups persistidos para operaçõe
 
 A pasta `docs/` contém:
 
-- `clyvo-care-api.yaml` — collection completa do Insomnia
+- `clyvo-care-api.yaml` — collection do Insomnia; nas requisições de contratação, preencher `access_token` com o JWT de `/auth/login` e `subscription_id` com o ID retornado pelo cadastro
 - `MER.png` — diagrama entidade-relacionamento
 - `script.sql` — schema de referência (13 tabelas) + seeds de demonstração + PL/SQL da disciplina de Database
 - `Arquitetura_DevOps.drawio` — diagrama de arquitetura na nuvem
 
-Para um teste end-to-end rápido:
+A feature de simulação e contratação foi conferida em 07/09/2026 com requisições HTTP reais contra o Oracle FIAP: quatro formas de pagamento, validações 400/404, permissões 401/403, cadastro com desconto, duplicidade 409, PUT com recálculo e duas criações concorrentes (201/409). Foram usados tokens temporários ADMIN/OWNER assinados para essa verificação; o endpoint de login não fez parte dela. Os pets e contratos temporários foram removidos, preservando as 11 contratações originais.
+
+Para conferir o fluxo manualmente, autentique-se como ADMIN para preparar os cadastros e executar o PUT. Use um token OWNER para simular e contratar:
 
 1. Crie um Estado via `POST /estados`
 2. Crie uma Cidade via `POST /cidades` referenciando o `stateId`
@@ -470,8 +504,11 @@ Para um teste end-to-end rápido:
 7. Crie um Plano via `POST /planos`
 8. Consulte os valores em `GET /formas-pagamento`
 9. Consulte os valores em `GET /status-contratacao`
-10. Crie uma Contratação via `POST /contratacoes` com `"status": "ACTIVE"` e `"paymentMethod": "PIX"`
-11. Liste via `GET /contratacoes?status=ACTIVE` e verifique a persistência
+10. Simule o plano via `POST /contratacoes/simulacao` com `planId` e `"paymentMethod": "PIX"`
+11. Crie uma Contratação via `POST /contratacoes` com `petId`, `planId` e `"paymentMethod": "PIX"`; confira `ACTIVE` e o preço calculado
+12. Repita a contratação para o mesmo pet e confira HTTP 409
+13. Como ADMIN, atualize a contratação por PUT usando `"paymentMethod": "DEBIT_CARD"` e confira o desconto de 3% e o status preservado
+14. Liste via `GET /contratacoes?status=ACTIVE` e verifique a persistência
 
 ---
 
@@ -580,7 +617,8 @@ END;
 ### Java Advanced — Sprint 3
 - **Flyway**: V1 histórica + V2 dos enums de status e pagamento; schema atual com 13 tabelas, conversão dos dados existentes e `ddl-auto=validate`
 - **Spring Security**: autenticação JWT stateless (RSA/RS256), 2 perfis (`ADMIN`/`OWNER`) via `TB_CAD_OWNER.ROLE_NAME`, rotas protegidas por perfil com `@PreAuthorize`
-- 2 fluxos não-CRUD com regra de negócio (contratação de plano com desconto por forma de pagamento; ciclo de vida da assinatura) — em desenvolvimento
+- **Fluxo de simulação e contratação:** implementado, com desconto por pagamento, status inicial definido pelo backend, validação de duplicidade e recálculo no PUT.
+- **Ciclo de vida da assinatura:** transições e operação específica de troca de plano pendentes.
 
 ---
 

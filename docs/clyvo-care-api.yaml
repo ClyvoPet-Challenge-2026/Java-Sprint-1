@@ -365,10 +365,11 @@ collection:
               {
                 "petId": 1,
                 "planId": 1,
-                "status": "ACTIVE",
                 "paymentMethod": "PIX"
               }
         headers:
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
           - name: Content-Type
             value: application/json
           - name: User-Agent
@@ -383,6 +384,64 @@ collection:
             send: true
             store: true
           rebuildPath: true
+      - url: "{{ _['base_url '].base_url }}/contratacoes/simulacao"
+        name: PostSimulacaoContratacao
+        meta:
+          id: req_f891d55c59b44859b220671d59a81ae9
+          isPrivate: false
+          description: ""
+          sortKey: -1779318142676
+        method: POST
+        body:
+          mimeType: application/json
+          text: |
+            {
+              "planId": 1,
+              "paymentMethod": "PIX"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _['base_url '].base_url }}/contratacoes/{{ _.subscription_id }}"
+        name: PutContratacao
+        meta:
+          id: req_3653b1aaef6942a7a81bda468c1ba308
+          isPrivate: false
+          description: ""
+          sortKey: -1779318142674
+        method: PUT
+        body:
+          mimeType: application/json
+          text: |
+            {
+              "petId": 1,
+              "planId": 1,
+              "paymentMethod": "DEBIT_CARD"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+
 cookieJar:
   name: Default Jar
   meta:
@@ -397,5 +456,7 @@ environments:
     modified: 1779318314415
     isPrivate: false
   data:
+    access_token: ""
+    subscription_id: 1
     "base_url ":
       base_url: http://localhost:8080
