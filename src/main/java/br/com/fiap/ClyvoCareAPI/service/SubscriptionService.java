@@ -1,17 +1,19 @@
 package br.com.fiap.ClyvoCareAPI.service;
 
 import br.com.fiap.ClyvoCareAPI.dto.SubscriptionRequest;
+import br.com.fiap.ClyvoCareAPI.dto.SubscriptionSimulationRequest;
 import br.com.fiap.ClyvoCareAPI.entity.PaymentMethod;
 import br.com.fiap.ClyvoCareAPI.entity.Pet;
 import br.com.fiap.ClyvoCareAPI.entity.Plan;
-import br.com.fiap.ClyvoCareAPI.entity.SubscriptionStatus;
 import br.com.fiap.ClyvoCareAPI.entity.Subscription;
+import br.com.fiap.ClyvoCareAPI.entity.SubscriptionStatus;
 import br.com.fiap.ClyvoCareAPI.repository.SubscriptionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
@@ -20,41 +22,111 @@ public class SubscriptionService {
     private final SubscriptionRepository subscriptionRepository;
     private final PetService petService;
     private final PlanService planService;
+    private final ContractPricingService contractPricingService;
 
-    public Page<Subscription> searchSubscriptions(Long petId, Long planId, SubscriptionStatus status, PaymentMethod paymentMethod, Pageable pageable) {
-        return subscriptionRepository.search(petId, planId, status, paymentMethod, pageable);
+    public Page<Subscription> searchSubscriptions(
+            Long petId,
+            Long planId,
+            SubscriptionStatus status,
+            PaymentMethod paymentMethod,
+            Pageable pageable
+    ) {
+        return subscriptionRepository.search(
+                petId, planId, status, paymentMethod, pageable
+        );
     }
 
     public Subscription findSubscriptionById(Long id) {
         return subscriptionRepository.findById(id).orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        String.format("Subscription with ID %d not found", id))
+                () -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        String.format("Subscription with ID %d not found", id)
+                )
         );
     }
 
-    public Subscription createSubscription(SubscriptionRequest request) {
-        Pet pet = petService.findPetById(request.petId());
+    @Transactional(readOnly = true)
+    public ContractPricingService.PriceCalculation simulateSubscription(
+            SubscriptionSimulationRequest request
+    ) {
         Plan plan = planService.findPlanById(request.planId());
-        return subscriptionRepository.save(request.toEntity(pet, plan));
+
+        return contractPricingService.calculate(
+                plan.getMonthlyValue(),
+                request.paymentMethod()
+        );
     }
 
+    @Transactional
+    public Subscription createSubscription(SubscriptionRequest request) {
+        Plan plan = planService.findPlanById(request.planId());
+        Pet pet = petService.findPetByIdForUpdate(request.petId());
+
+        validateActiveSubscription(pet.getId(), null);
+
+        var calculation = contractPricingService.calculate(
+                plan.getMonthlyValue(),
+                request.paymentMethod()
+        );
+
+        Subscription subscription = request.toEntity(
+                pet,
+                plan,
+                SubscriptionStatus.ACTIVE,
+                calculation.finalValue()
+        );
+
+        return subscriptionRepository.save(subscription);
+    }
+
+    @Transactional
     public Subscription updateSubscription(Long id, SubscriptionRequest request) {
         Subscription existing = findSubscriptionById(id);
-        Pet pet = petService.findPetById(request.petId());
         Plan plan = planService.findPlanById(request.planId());
+        Pet pet = petService.findPetByIdForUpdate(request.petId());
+
+        if (existing.getStatus() == SubscriptionStatus.ACTIVE) {
+            validateActiveSubscription(pet.getId(), existing.getId());
+        }
+
+        var calculation = contractPricingService.calculate(
+                plan.getMonthlyValue(),
+                request.paymentMethod()
+        );
+
         existing.setPet(pet);
         existing.setPlan(plan);
-        existing.setStatus(request.status());
         existing.setPaymentMethod(request.paymentMethod());
-        existing.setContractedValue(plan.getMonthlyValue());
+        existing.setContractedValue(calculation.finalValue());
+
         return subscriptionRepository.save(existing);
+    }
+
+    private void validateActiveSubscription(Long petId, Long excludedId) {
+        boolean alreadyActive = excludedId == null
+                ? subscriptionRepository.existsByPet_IdAndStatus(
+                        petId, SubscriptionStatus.ACTIVE
+                )
+                : subscriptionRepository.existsByPet_IdAndStatusAndIdNot(
+                        petId, SubscriptionStatus.ACTIVE, excludedId
+                );
+
+        if (alreadyActive) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Pet already has an active subscription"
+            );
+        }
     }
 
     public void deleteSubscription(Long id) {
         if (!subscriptionRepository.existsById(id)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    String.format("Subscription with ID %d not found", id));
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    String.format("Subscription with ID %d not found", id)
+            );
         }
+
         subscriptionRepository.deleteById(id);
     }
 }

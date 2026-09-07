@@ -2,8 +2,10 @@ package br.com.fiap.ClyvoCareAPI.controller;
 
 import br.com.fiap.ClyvoCareAPI.dto.SubscriptionRequest;
 import br.com.fiap.ClyvoCareAPI.dto.SubscriptionResponse;
-import br.com.fiap.ClyvoCareAPI.entity.SubscriptionStatus;
+import br.com.fiap.ClyvoCareAPI.dto.SubscriptionSimulationRequest;
+import br.com.fiap.ClyvoCareAPI.dto.SubscriptionSimulationResponse;
 import br.com.fiap.ClyvoCareAPI.entity.PaymentMethod;
+import br.com.fiap.ClyvoCareAPI.entity.SubscriptionStatus;
 import br.com.fiap.ClyvoCareAPI.service.SubscriptionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -21,12 +23,12 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/contratacoes")
 @RequiredArgsConstructor
-@Tag(name = "Contratações", description = "CRUD das contratações de plano. Valor mensal é derivado do Plan automaticamente (cliente não envia)")
+@Tag(name = "Contratações", description = "Gestão de contratações e simulação de preços com desconto")
 public class SubscriptionController {
     private final SubscriptionService subscriptionService;
 
     @GetMapping
-    @Operation(summary = "Lista contratações com paginação e filtros opcionais por pet, plano, status e forma de pagamento")
+    @Operation(summary = "Lista contratações com paginação e filtros opcionais")
     public Page<SubscriptionResponse> findAll(
             @RequestParam(required = false) Long petId,
             @RequestParam(required = false) Long planId,
@@ -34,7 +36,9 @@ public class SubscriptionController {
             @RequestParam(required = false) PaymentMethod paymentMethod,
             Pageable pageable
     ) {
-        return subscriptionService.searchSubscriptions(petId, planId, status, paymentMethod, pageable)
+        return subscriptionService.searchSubscriptions(
+                        petId, planId, status, paymentMethod, pageable
+                )
                 .map(SubscriptionResponse::fromEntity);
     }
 
@@ -45,33 +49,62 @@ public class SubscriptionController {
             @ApiResponse(responseCode = "404", description = "Contratação não encontrada")
     })
     public SubscriptionResponse findById(@PathVariable Long id) {
-        return SubscriptionResponse.fromEntity(subscriptionService.findSubscriptionById(id));
+        return SubscriptionResponse.fromEntity(
+                subscriptionService.findSubscriptionById(id)
+        );
+    }
+
+    @PostMapping("/simulacao")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @Operation(summary = "Simula o preço da contratação com desconto")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Simulação calculada"),
+            @ApiResponse(responseCode = "400", description = "Erro de validação"),
+            @ApiResponse(responseCode = "404", description = "Plano não encontrado")
+    })
+    public SubscriptionSimulationResponse simulate(
+            @RequestBody @Valid SubscriptionSimulationRequest request
+    ) {
+        return SubscriptionSimulationResponse.fromCalculation(
+                subscriptionService.simulateSubscription(request)
+        );
     }
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
-    @Operation(summary = "Cria uma nova contratação. O contractedValue é derivado do Plan.monthlyValue, não pode ser enviado")
+    @Operation(summary = "Cria uma contratação ACTIVE com desconto por pagamento")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Contratação criada"),
             @ApiResponse(responseCode = "400", description = "Erro de validação"),
-            @ApiResponse(responseCode = "404", description = "Pet ou plano não encontrado")
+            @ApiResponse(responseCode = "404", description = "Pet ou plano não encontrado"),
+            @ApiResponse(responseCode = "409", description = "Pet já possui contratação ativa")
     })
-    public ResponseEntity<SubscriptionResponse> create(@RequestBody @Valid SubscriptionRequest request) {
+    public ResponseEntity<SubscriptionResponse> create(
+            @RequestBody @Valid SubscriptionRequest request
+    ) {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(SubscriptionResponse.fromEntity(subscriptionService.createSubscription(request)));
+                .body(SubscriptionResponse.fromEntity(
+                        subscriptionService.createSubscription(request)
+                ));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Atualiza uma contratação. Trocar plano também recalcula contractedValue")
+    @Operation(summary = "Atualiza a contratação e recalcula o preço, preservando o status")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Contratação atualizada"),
             @ApiResponse(responseCode = "400", description = "Erro de validação"),
-            @ApiResponse(responseCode = "404", description = "Contratação ou alguma FK não encontrada")
+            @ApiResponse(responseCode = "404", description = "Contratação, pet ou plano não encontrado"),
+            @ApiResponse(responseCode = "409", description = "Pet já possui outra contratação ativa")
     })
-    public SubscriptionResponse update(@PathVariable Long id, @RequestBody @Valid SubscriptionRequest request) {
-        return SubscriptionResponse.fromEntity(subscriptionService.updateSubscription(id, request));
+    public SubscriptionResponse update(
+            @PathVariable Long id,
+            @RequestBody @Valid SubscriptionRequest request
+    ) {
+        return SubscriptionResponse.fromEntity(
+                subscriptionService.updateSubscription(id, request)
+        );
     }
 
     @DeleteMapping("/{id}")

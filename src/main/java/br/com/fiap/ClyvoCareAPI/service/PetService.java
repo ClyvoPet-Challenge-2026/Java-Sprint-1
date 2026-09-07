@@ -21,14 +21,31 @@ public class PetService {
     private final SpeciesService speciesService;
     private final BreedService breedService;
 
-    public Page<Pet> searchPets(String name, Long ownerId, Long speciesId, Long breedId, Pageable pageable) {
+    public Page<Pet> searchPets(
+            String name,
+            Long ownerId,
+            Long speciesId,
+            Long breedId,
+            Pageable pageable
+    ) {
         return petRepository.search(name, ownerId, speciesId, breedId, pageable);
     }
 
     public Pet findPetById(Long id) {
         return petRepository.findById(id).orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        String.format("Pet with ID %d not found", id))
+                () -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        String.format("Pet with ID %d not found", id)
+                )
+        );
+    }
+
+    public Pet findPetByIdForUpdate(Long id) {
+        return petRepository.findByIdForUpdate(id).orElseThrow(
+                () -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        String.format("Pet with ID %d not found", id)
+                )
         );
     }
 
@@ -38,6 +55,7 @@ public class PetService {
         Breed breed = request.breedId() != null
                 ? breedService.findBreedById(request.breedId())
                 : null;
+
         return petRepository.save(request.toEntity(owner, species, breed));
     }
 
@@ -48,20 +66,25 @@ public class PetService {
         Breed breed = request.breedId() != null
                 ? breedService.findBreedById(request.breedId())
                 : null;
+
         existing.setName(request.name());
         existing.setBirthDate(request.birthDate());
         existing.setSex(request.sex());
         existing.setOwner(owner);
         existing.setSpecies(species);
         existing.setBreed(breed);
+
         return petRepository.save(existing);
     }
 
     public void deletePet(Long id) {
         if (!petRepository.existsById(id)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    String.format("Pet with ID %d not found", id));
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    String.format("Pet with ID %d not found", id)
+            );
         }
+
         petRepository.deleteById(id);
     }
 }
