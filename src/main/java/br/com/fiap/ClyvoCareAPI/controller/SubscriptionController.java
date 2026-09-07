@@ -1,5 +1,7 @@
 package br.com.fiap.ClyvoCareAPI.controller;
 
+import br.com.fiap.ClyvoCareAPI.dto.ChangePlanRequest;
+import br.com.fiap.ClyvoCareAPI.dto.ChangeStatusRequest;
 import br.com.fiap.ClyvoCareAPI.dto.SubscriptionRequest;
 import br.com.fiap.ClyvoCareAPI.dto.SubscriptionResponse;
 import br.com.fiap.ClyvoCareAPI.dto.SubscriptionSimulationRequest;
@@ -96,7 +98,7 @@ public class SubscriptionController {
             @ApiResponse(responseCode = "200", description = "Contratação atualizada"),
             @ApiResponse(responseCode = "400", description = "Erro de validação"),
             @ApiResponse(responseCode = "404", description = "Contratação, pet ou plano não encontrado"),
-            @ApiResponse(responseCode = "409", description = "Pet já possui outra contratação ativa")
+            @ApiResponse(responseCode = "409", description = "Contratação encerrada ou pet já possui outra contratação ativa")
     })
     public SubscriptionResponse update(
             @PathVariable Long id,
@@ -105,6 +107,36 @@ public class SubscriptionController {
         return SubscriptionResponse.fromEntity(
                 subscriptionService.updateSubscription(id, request)
         );
+    }
+
+    @PatchMapping("/{id}/status")
+    @Operation(summary = "Altera o status conforme as transições permitidas")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Status atualizado"),
+            @ApiResponse(responseCode = "400", description = "Erro de validação"),
+            @ApiResponse(responseCode = "404", description = "Contratação não encontrada"),
+            @ApiResponse(responseCode = "409", description = "Transição inválida ou pet já possui outra contratação ativa")
+    })
+    public SubscriptionResponse changeStatus(
+            @PathVariable Long id,
+            @RequestBody @Valid ChangeStatusRequest request
+    ) {
+        return SubscriptionResponse.fromEntity(subscriptionService.changeStatus(id, request));
+    }
+
+    @PostMapping("/{id}/troca-plano")
+    @Operation(summary = "Troca o plano de uma contratação ACTIVE ou PENDING e recalcula o preço")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Plano atualizado"),
+            @ApiResponse(responseCode = "400", description = "Erro de validação"),
+            @ApiResponse(responseCode = "404", description = "Contratação ou plano não encontrado"),
+            @ApiResponse(responseCode = "409", description = "Contratação encerrada")
+    })
+    public SubscriptionResponse changePlan(
+            @PathVariable Long id,
+            @RequestBody @Valid ChangePlanRequest request
+    ) {
+        return SubscriptionResponse.fromEntity(subscriptionService.changePlan(id, request));
     }
 
     @DeleteMapping("/{id}")

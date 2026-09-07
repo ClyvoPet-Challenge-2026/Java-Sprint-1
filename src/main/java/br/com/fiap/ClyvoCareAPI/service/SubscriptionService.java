@@ -1,5 +1,7 @@
 package br.com.fiap.ClyvoCareAPI.service;
 
+import br.com.fiap.ClyvoCareAPI.dto.ChangePlanRequest;
+import br.com.fiap.ClyvoCareAPI.dto.ChangeStatusRequest;
 import br.com.fiap.ClyvoCareAPI.dto.SubscriptionRequest;
 import br.com.fiap.ClyvoCareAPI.dto.SubscriptionSimulationRequest;
 import br.com.fiap.ClyvoCareAPI.entity.PaymentMethod;
@@ -23,6 +25,7 @@ public class SubscriptionService {
     private final PetService petService;
     private final PlanService planService;
     private final ContractPricingService contractPricingService;
+    private final SubscriptionLifecycleService subscriptionLifecycleService;
 
     public Page<Subscription> searchSubscriptions(
             Long petId,
@@ -81,7 +84,9 @@ public class SubscriptionService {
 
     @Transactional
     public Subscription updateSubscription(Long id, SubscriptionRequest request) {
-        Subscription existing = findSubscriptionById(id);
+        Subscription existing = findSubscriptionByIdForUpdate(id);
+        subscriptionLifecycleService.validatePlanChange(existing.getStatus());
+
         Plan plan = planService.findPlanById(request.planId());
         Pet pet = petService.findPetByIdForUpdate(request.petId());
 
@@ -89,17 +94,54 @@ public class SubscriptionService {
             validateActiveSubscription(pet.getId(), existing.getId());
         }
 
-        var calculation = contractPricingService.calculate(
-                plan.getMonthlyValue(),
-                request.paymentMethod()
-        );
-
         existing.setPet(pet);
-        existing.setPlan(plan);
-        existing.setPaymentMethod(request.paymentMethod());
-        existing.setContractedValue(calculation.finalValue());
+        applyPlanAndPayment(existing, plan, request.paymentMethod());
 
         return subscriptionRepository.save(existing);
+    }
+
+    @Transactional
+    public Subscription changeStatus(Long id, ChangeStatusRequest request) {
+        Subscription existing = findSubscriptionByIdForUpdate(id);
+        subscriptionLifecycleService.validateTransition(existing.getStatus(), request.status());
+
+        if (request.status() == SubscriptionStatus.ACTIVE) {
+            Pet pet = petService.findPetByIdForUpdate(existing.getPet().getId());
+            validateActiveSubscription(pet.getId(), existing.getId());
+        }
+
+        existing.setStatus(request.status());
+        return subscriptionRepository.save(existing);
+    }
+
+    @Transactional
+    public Subscription changePlan(Long id, ChangePlanRequest request) {
+        Subscription existing = findSubscriptionByIdForUpdate(id);
+        subscriptionLifecycleService.validatePlanChange(existing.getStatus());
+
+        Plan plan = planService.findPlanById(request.planId());
+        PaymentMethod paymentMethod = request.paymentMethod() != null
+                ? request.paymentMethod()
+                : existing.getPaymentMethod();
+
+        applyPlanAndPayment(existing, plan, paymentMethod);
+        return subscriptionRepository.save(existing);
+    }
+
+    private Subscription findSubscriptionByIdForUpdate(Long id) {
+        return subscriptionRepository.findByIdForUpdate(id).orElseThrow(
+                () -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        String.format("Subscription with ID %d not found", id)
+                )
+        );
+    }
+
+    private void applyPlanAndPayment(Subscription subscription, Plan plan, PaymentMethod paymentMethod) {
+        var calculation = contractPricingService.calculate(plan.getMonthlyValue(), paymentMethod);
+        subscription.setPlan(plan);
+        subscription.setPaymentMethod(paymentMethod);
+        subscription.setContractedValue(calculation.finalValue());
     }
 
     private void validateActiveSubscription(Long petId, Long excludedId) {
