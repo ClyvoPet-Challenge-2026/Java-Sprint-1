@@ -345,18 +345,18 @@ Os dois campos usam `@Enumerated(EnumType.STRING)` e colunas `VARCHAR2(20)` na c
 | `status` / `STATUS` | `SubscriptionStatus` | `ACTIVE`, `INACTIVE`, `PENDING` |
 | `paymentMethod` / `PAYMENT_METHOD` | `PaymentMethod` | `CREDIT_CARD`, `DEBIT_CARD`, `BOLETO`, `PIX` |
 
-`ACTIVE` indica contratação ativa; `INACTIVE`, encerrada ou desativada; `PENDING`, aguardando confirmação ou regularização.
+`ACTIVE` indica contratação ativa; `PENDING`, pausada ou aguardando regularização; `INACTIVE`, encerrada definitivamente. Uma contratação encerrada não pode ser reativada; o pet pode receber uma nova contratação.
 
 - POST e PUT recebem `petId`, `planId` e `paymentMethod`. O POST define `ACTIVE` no backend; o PUT preserva o status atual. As respostas incluem `status` e `paymentMethod` como strings.
 - Filtros: `GET /contratacoes?status=ACTIVE&paymentMethod=PIX`.
 - `GET /status-contratacao` e `GET /formas-pagamento` retornam listas fixas, sem consultar o banco. Essas rotas não possuem criação, edição, exclusão ou consulta por ID.
 - IDs obrigatórios devem ser positivos. `paymentMethod` ausente, nulo, desconhecido ou numérico retorna HTTP 400; filtros de enum inválidos também retornam 400.
 
-`ContractPricingService` aplica **5% para PIX e 3% para cartão de débito**; crédito e boleto não têm desconto. O cálculo é compartilhado pela simulação, pelo cadastro e pelo PUT, com arredondamento monetário para duas casas. A função Oracle `FN_CALCULATE_CONTRACT_VALUE` segue as mesmas taxas.
+`ContractPricingService` aplica **5% para PIX e 3% para cartão de débito**; crédito e boleto não têm desconto. O cálculo é compartilhado pela simulação, pelo cadastro, pelo PUT e pela troca de plano, com arredondamento monetário para duas casas. A função Oracle `FN_CALCULATE_CONTRACT_VALUE` segue as mesmas taxas.
 
 `POST /contratacoes/simulacao` retorna o preço do plano, a taxa e o valor do desconto e o preço final, sem criar contratação. Na confirmação, o backend consulta novamente o preço do plano e grava o valor calculado.
 
-Um pet pode ter apenas uma contratação `ACTIVE` criada por esse fluxo. POST e PUT validam duplicidade sob bloqueio do pet dentro de uma transação; conflito retorna HTTP 409. Ao atualizar uma contratação ativa, a consulta exclui o próprio registro. As regras de transição de status e o endpoint específico de troca de plano continuam para a próxima feature.
+Um pet pode ter apenas uma contratação `ACTIVE` criada ou ativada por esses fluxos. Cadastro, atualização de contratação ativa e ativação de uma contratação `PENDING` validam duplicidade sob bloqueio do pet dentro de uma transação; conflito retorna HTTP 409. Nas alterações, a consulta exclui o próprio registro. PUT, troca de plano e mudança de status também bloqueiam a contratação durante a operação, para evitar que alterações concorrentes sobrescrevam um encerramento.
 
 A V2 foi aplicada e validada no Oracle FIAP, preservando as 11 contratações existentes. A inicialização do Spring/Hibernate com o schema migrado também foi conferida.
 
@@ -458,7 +458,46 @@ Content-Type: application/json
 }
 ```
 
-O PUT exige `ADMIN`, preserva o status e recalcula o preço conforme plano e pagamento informados. A alteração de status terá uma operação própria na próxima feature.
+O PUT exige `ADMIN`, preserva o status e recalcula o preço conforme plano e pagamento informados. Assim como a troca de plano, só aceita contratações `ACTIVE` ou `PENDING`; uma contratação `INACTIVE` retorna HTTP 409.
+
+### Ciclo de vida da contratação
+
+```http
+PATCH /contratacoes/1/status
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+    "status": "PENDING"
+}
+```
+
+As transições seguem esta tabela:
+
+| Status atual | Pode mudar para |
+|---|---|
+| `ACTIVE` | `PENDING`, `INACTIVE` |
+| `PENDING` | `ACTIVE`, `INACTIVE` |
+| `INACTIVE` | Nenhum — encerramento definitivo |
+
+Uma transição válida retorna HTTP 200 com `SubscriptionResponse`, preservando plano, pagamento, valor e data da contratação. Repetir o status atual, tentar reativar uma contratação encerrada ou ativar uma contratação quando o pet já possui outra ativa retorna HTTP 409. Status ausente, nulo ou inválido retorna 400; contratação inexistente retorna 404.
+
+### Troca de plano
+
+```http
+POST /contratacoes/1/troca-plano
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+    "planId": 2,
+    "paymentMethod": "DEBIT_CARD"
+}
+```
+
+`planId` é obrigatório e positivo. `paymentMethod` é opcional: omitido ou nulo, mantém o pagamento atual. A operação consulta o preço atual do plano, aplica o desconto e retorna HTTP 200 com `SubscriptionResponse`, preservando pet, status e data da contratação. Só é permitida em `ACTIVE` ou `PENDING`; `INACTIVE` retorna 409. Plano ou contratação inexistente retorna 404; dados inválidos retornam 400.
+
+Os dois novos endpoints exigem JWT pela configuração global existente. As regras específicas por perfil para essas operações ficam para a integração com o responsável por Security.
 
 ### Filtros úteis em contratações
 
@@ -493,6 +532,8 @@ A pasta `docs/` contém:
 
 A feature de simulação e contratação foi conferida em 07/09/2026 com requisições HTTP reais contra o Oracle FIAP: quatro formas de pagamento, validações 400/404, permissões 401/403, cadastro com desconto, duplicidade 409, PUT com recálculo e duas criações concorrentes (201/409). Foram usados tokens temporários ADMIN/OWNER assinados para essa verificação; o endpoint de login não fez parte dela. Os pets e contratos temporários foram removidos, preservando as 11 contratações originais.
 
+O ciclo de vida e a troca de plano também foram conferidos por HTTP no Oracle FIAP em 07/09/2026: as nove combinações de status, troca em ACTIVE/PENDING com os quatro pagamentos, bloqueio de INACTIVE no PUT e na troca, e concorrência entre ativações, cadastro e ativação, encerramento e troca/PUT. A validação usou tokens temporários, removeu os dados criados e preservou as 11 contratações originais. Não houve alteração nas migrations.
+
 Para conferir o fluxo manualmente, autentique-se como ADMIN para preparar os cadastros e executar o PUT. Use um token OWNER para simular e contratar:
 
 1. Crie um Estado via `POST /estados`
@@ -509,6 +550,9 @@ Para conferir o fluxo manualmente, autentique-se como ADMIN para preparar os cad
 12. Repita a contratação para o mesmo pet e confira HTTP 409
 13. Como ADMIN, atualize a contratação por PUT usando `"paymentMethod": "DEBIT_CARD"` e confira o desconto de 3% e o status preservado
 14. Liste via `GET /contratacoes?status=ACTIVE` e verifique a persistência
+15. Altere para `PENDING` via `PATCH /contratacoes/{id}/status` e confira que o valor foi preservado
+16. Troque o plano via `POST /contratacoes/{id}/troca-plano`; omita `paymentMethod` para manter o pagamento atual
+17. Reative para `ACTIVE`, encerre em `INACTIVE` e confira HTTP 409 ao tentar reativar, trocar plano ou executar PUT na contratação encerrada
 
 ---
 
@@ -618,7 +662,7 @@ END;
 - **Flyway**: V1 histórica + V2 dos enums de status e pagamento; schema atual com 13 tabelas, conversão dos dados existentes e `ddl-auto=validate`
 - **Spring Security**: autenticação JWT stateless (RSA/RS256), 2 perfis (`ADMIN`/`OWNER`) via `TB_CAD_OWNER.ROLE_NAME`, rotas protegidas por perfil com `@PreAuthorize`
 - **Fluxo de simulação e contratação:** implementado, com desconto por pagamento, status inicial definido pelo backend, validação de duplicidade e recálculo no PUT.
-- **Ciclo de vida da assinatura:** transições e operação específica de troca de plano pendentes.
+- **Ciclo de vida da assinatura:** transições entre ACTIVE/PENDING/INACTIVE e troca de plano implementadas, com bloqueio de encerradas e validação de contratação ativa duplicada na ativação. Permissões específicas dos novos endpoints ficam para a integração de Security.
 
 ---
 

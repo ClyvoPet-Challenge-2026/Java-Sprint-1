@@ -442,6 +442,62 @@ collection:
             store: true
           rebuildPath: true
 
+      - url: "{{ _['base_url '].base_url }}/contratacoes/{{ _.subscription_id }}/status"
+        name: PatchStatusContratacao
+        meta:
+          id: req_98314614cd1f4e60ad727e5c494d6e1a
+          isPrivate: false
+          description: ""
+          sortKey: -1779318142673
+        method: PATCH
+        body:
+          mimeType: application/json
+          text: |
+            {
+              "status": "PENDING"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _['base_url '].base_url }}/contratacoes/{{ _.subscription_id }}/troca-plano"
+        name: PostTrocaPlanoContratacao
+        meta:
+          id: req_842d2ed153724112a0d81fd6ad80b624
+          isPrivate: false
+          description: ""
+          sortKey: -1779318142672
+        method: POST
+        body:
+          mimeType: application/json
+          text: |
+            {
+              "planId": 2,
+              "paymentMethod": "DEBIT_CARD"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+
 cookieJar:
   name: Default Jar
   meta:
