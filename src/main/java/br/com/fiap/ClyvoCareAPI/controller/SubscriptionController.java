@@ -110,6 +110,7 @@ public class SubscriptionController {
     }
 
     @PatchMapping("/{id}/status")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Altera o status conforme as transições permitidas")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Status atualizado"),
@@ -125,6 +126,7 @@ public class SubscriptionController {
     }
 
     @PostMapping("/{id}/troca-plano")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Troca o plano de uma contratação ACTIVE ou PENDING e recalcula o preço")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Plano atualizado"),
