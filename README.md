@@ -330,6 +330,14 @@ Use o token nas próximas requisições: `Authorization: Bearer <token>`.
 | Lookups (planos, estados, cidades, espécies, raças) | qualquer logado | ADMIN | ADMIN | ADMIN |
 | `/status-contratacao`, `/formas-pagamento` | qualquer logado | — | — | — |
 
+Rotas de fluxo de `/contratacoes`:
+
+| Rota | Perfil |
+|---|---|
+| `POST /contratacoes/simulacao` | ADMIN ou OWNER |
+| `PATCH /contratacoes/{id}/status` | ADMIN |
+| `POST /contratacoes/{id}/troca-plano` | ADMIN |
+
 `/auth/login` e o Swagger (`/swagger-ui/**`, `/v3/api-docs/**`) são as únicas rotas públicas, além do `POST /responsaveis`.
 
 > CORS ainda não está configurado — ver [Limitações conhecidas](#limitações-conhecidas).
@@ -662,7 +670,8 @@ END;
 - **Flyway**: V1 histórica + V2 dos enums de status e pagamento; schema atual com 13 tabelas, conversão dos dados existentes e `ddl-auto=validate`
 - **Spring Security**: autenticação JWT stateless (RSA/RS256), 2 perfis (`ADMIN`/`OWNER`) via `TB_CAD_OWNER.ROLE_NAME`, rotas protegidas por perfil com `@PreAuthorize`
 - **Fluxo de simulação e contratação:** implementado, com desconto por pagamento, status inicial definido pelo backend, validação de duplicidade e recálculo no PUT.
-- **Ciclo de vida da assinatura:** transições entre ACTIVE/PENDING/INACTIVE e troca de plano implementadas, com bloqueio de encerradas e validação de contratação ativa duplicada na ativação. Permissões específicas dos novos endpoints ficam para a integração de Security.
+- **Ciclo de vida da assinatura:** transições entre ACTIVE/PENDING/INACTIVE e troca de plano implementadas, com bloqueio de encerradas e validação de contratação ativa duplicada na ativação.
+- **Proteção por perfil dos endpoints de fluxo:** `POST /contratacoes/simulacao` liberado para ADMIN e OWNER; `PATCH /contratacoes/{id}/status` e `POST /contratacoes/{id}/troca-plano` restritos a ADMIN via `@PreAuthorize`.
 
 ---
 
