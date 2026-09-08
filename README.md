@@ -339,7 +339,9 @@ Rotas de fluxo de `/contratacoes`:
 
 `/auth/login` e o Swagger (`/swagger-ui/**`, `/v3/api-docs/**`) são as únicas rotas públicas, além do `POST /responsaveis`.
 
-> CORS ainda não está configurado — ver [Limitações conhecidas](#limitações-conhecidas).
+### CORS
+
+O frontend (React + Vite) roda em outra origem. `CorsConfig` libera `GET/POST/PUT/PATCH/DELETE/OPTIONS` e os headers `Authorization`/`Content-Type` para as origens em `cors.allowed-origins` (default: `http://localhost:5173` e `http://localhost:3000`). Em produção, definir `CORS_ALLOWED_ORIGINS` com a URL do front.
 
 ---
 
@@ -678,7 +680,6 @@ END;
 
 - **docker-compose.yml não versionado.** Por segurança, o arquivo está no `.gitignore`. O script `azure-setup.sh` o cria automaticamente na VM durante o provisionamento.
 - **Validação de FK entre APIs não acontece em tempo real.** O Oracle resolve via constraints, mas a UX em casos de borda não é polida.
-- **CORS ainda não configurado.** Pendente da URL do deploy do frontend (repositório separado).
 - **Sem ownership-scoping.** Um `OWNER` autenticado lista/consulta todos os pets e contratações, não só os seus — as regras de perfil (`ADMIN`/`OWNER`) valem por rota, não por dono do recurso.
 - **Java 17 no `pom.xml`, Java 23 no `Dockerfile`.** Inconsistência herdada da conteinerização; a build local usa 17, a imagem Docker usa 23. Decisão de qual usar ainda em aberto.
 
