@@ -67,4 +67,15 @@ public class OwnerService {
         }
         ownerRepository.deleteById(id);
     }
+
+    public Owner authenticate(String email, String rawPassword) {
+        Owner owner = ownerRepository.findByEmail(email).orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciais inválidas")
+        );
+        if (!BCrypt.checkpw(rawPassword, owner.getPasswordHash())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciais inválidas");
+        }
+        return owner;
+    }
 }
+
