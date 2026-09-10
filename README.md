@@ -80,42 +80,32 @@ O ClyvoCare resolve um problema real do mercado pet brasileiro: a fragmentação
 
 ---
 
-## Arquitetura Macro na Nuvem
+## Arquitetura Macro na Nuvem (ACR + ACI — mexicocentral)
 
 ```
 Usuário / Browser / Insomnia
             |
        HTTP :8080
             |
-   Microsoft Azure — East US 2
-   ┌─────────────────────────────────────────┐
-   │  VM: vm-clyvo (Standard_D2s_v3)         │
-   │  Ubuntu 24.04 LTS                        │
-   │                                          │
-   │  ┌──────────────────────────────────┐   │
-   │  │  Docker Engine                   │   │
-   │  │                                  │   │
-   │  │  ┌─────────────┐  JDBC :1521     │   │
-   │  │  │ clyvocare-  │ ──────────────► │   │
-   │  │  │ api         │  ┌────────────┐ │   │
-   │  │  │             │  │ clyvocare- │ │   │
-   │  │  │ Spring Boot │  │ oracle     │ │   │
-   │  │  │ Java 23     │  │            │ │   │
-   │  │  │ porta 8080  │  │ Oracle XE  │ │   │
-   │  │  │ user:appuser│  │ 21-slim    │ │   │
-   │  │  └─────────────┘  │ porta 1521 │ │   │
-   │  │                   └─────┬──────┘ │   │
-   │  │                         │        │   │
-   │  │              ┌──────────▼──────┐ │   │
-   │  │              │ Volume nomeado  │ │   │
-   │  │              │ oracle-data     │ │   │
-   │  │              │ (persistência)  │ │   │
-   │  │              └─────────────────┘ │   │
-   │  └──────────────────────────────────┘   │
-   └─────────────────────────────────────────┘
+   Microsoft Azure — Região mexicocentral (Resource Group: rg-clyvocare-sprint3)
+   ┌────────────────────────────────────────────────────────────────────────┐
+   │  Azure Container Registry (ACR): acrclyvoXXXXX (SKU Basic)             │
+   │  - Armazena a imagem Docker: clyvocare-api:v1                          │
+   └───────────────────────────────────┬────────────────────────────────────┘
+                                       │ pull image
+   ┌───────────────────────────────────▼────────────────────────────────────┐
+   │  Azure Container Instances (ACI) — Container Group                     │
+   │  FQDN: http://clyvocare-api-XXXXX.mexicocentral.azurecontainer.io:8080 │
+   │                                                                        │
+   │  ┌─────────────────────────────┐        ┌────────────────────────────┐ │
+   │  │ clyvocare-api               │        │ oracle-db                  │ │
+   │  │ Spring Boot (Java 23)       │  JDBC  │ Oracle XE 21-slim          │ │
+   │  │ Port: 8080 (Public)         ├───────►│ Port: 1521 (Internal)      │ │
+   │  │ Non-Root User (UID 10001)   │        │ Database: XEPDB1           │ │
+   │  │ CPU: 1.0 | RAM: 1.5 GB      │        │ CPU: 1.0 | RAM: 2.0 GB     │ │
+   │  └─────────────────────────────┘        └────────────────────────────┘ │
+   └────────────────────────────────────────────────────────────────────────┘
 ```
-
-> O diagrama visual completo (Draw.io) está disponível em `docs/Arquitetura_DevOps.drawio`.
 
 ---
 
@@ -123,10 +113,9 @@ Usuário / Browser / Insomnia
 
 Pré-requisitos no ambiente:
 
-- Java 17 instalado e disponível no `PATH`
-- Acesso à VPN da FIAP (necessário para alcançar `oracle.fiap.com.br`)
-- Credenciais do banco Oracle FIAP (RM e senha)
-- Schema Oracle acessível com o seu RM — o Flyway aplica V1 + V2 em um banco vazio; `docs/script.sql` recria o schema com 13 tabelas e dados de demonstração (ver [Schema do banco](#schema-do-banco))
+- Java 17+ instalado e disponível no `PATH`
+- Acesso à VPN da FIAP (caso queira conectar no `oracle.fiap.com.br`) ou Docker local para subir o Oracle XE (`docker compose up oracle-db -d`)
+- Schema Oracle estruturado: `script_bd.sql` recria o schema com todas as tabelas CORE, comentários e dados de demonstração (ver [Schema do banco](#schema-do-banco))
 
 O par de chaves RSA que assina o JWT já está versionado em `src/main/resources/keys/` (chaves de demonstração). Para um deploy real, gere um par novo (precisa de OpenSSL):
 
@@ -141,122 +130,108 @@ Rodando a aplicação:
 ./mvnw spring-boot:run
 ```
 
-Por padrão a API sobe na porta `8080`. Se você precisar de outra porta, sobrescreve com `--server.port=XXXX` ou edita o `application.properties`.
-
-Para confirmar que o banco conectou direito, no log da inicialização deve aparecer algo parecido com:
-
-```
-HikariPool-1 - Added connection oracle.jdbc.driver.T4CConnection
-Database JDBC URL [jdbc:oracle:thin:@oracle.fiap.com.br:1521:ORCL]
-Database dialect: OracleDialect
-```
+Por padrão a API sobe na porta `8080`. Se você precisar de outra porta, sobrescreva com `--server.port=XXXX` ou edite o `application.properties`.
 
 ---
 
-## Como executar na nuvem (Azure + Docker)
+## Como executar na nuvem (Azure ACR + ACI) — Sprint 3
 
-> Estas instruções de VM são da Sprint 1. A entrega de DevOps da Sprint 3 exige ACR + ACI ou App Service, conforme o enunciado. O provisionamento ainda precisa ser adaptado.
+> **Requisitos DevOps Cumpridos**:
+> 1. Solução containerizada completa: **App e Banco de Dados em Containers**.
+> 2. 100% dos recursos criados via **Azure CLI**.
+> 3. Região: **`mexicocentral`** (Otimizado para **Assinatura de Estudantes**).
+> 4. Container da aplicação executando como **usuário não-root / não-admin** (`UID 10001`).
+> 5. DDL com estrutura e comentários entregue no arquivo `script_bd.sql`.
 
 ### Pré-requisitos
 
-- [Azure CLI](https://aka.ms/installazurecliwindows) instalado
-- Conta Azure com subscription ativa
-- Docker instalado localmente (apenas para testes locais)
+- [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli) instalado
+- Assinatura Azure ativa (Azure for Students)
+- Docker instalado (opcional, pois o script utiliza o `az acr build` que compila diretamente na nuvem)
 
 ### 1. Login na Azure
 
 ```bash
 az login
-az account set --subscription "NOME_OU_ID_DA_SUBSCRIPTION"
+az account set --subscription "NOME_OU_ID_DA_SUA_ASSINATURA"
 ```
 
-### 2. Executar o script de provisionamento
+### 2. Executar o script de provisionamento automatizado
 
-O script `azure-setup.sh` na raiz do projeto realiza automaticamente todas as etapas de infraestrutura:
+O script `azure-acr-aci-setup.sh` na raiz do projeto realiza automaticamente todas as etapas exigidas na Sprint 3:
 
 ```bash
-chmod +x azure-setup.sh
-./azure-setup.sh
+chmod +x azure-acr-aci-setup.sh
+./azure-acr-aci-setup.sh
 ```
 
 O script executa em sequência:
+1. **Cria o Grupo de Recursos** `rg-clyvocare-sprint3` na região `mexicocentral`.
+2. **Cria o Azure Container Registry (ACR)** com SKU `Basic` e habilita autenticação administrativa.
+3. **Executa o build da imagem da API** com Dockerfile multi-stage e envia para o ACR (`az acr build`).
+4. **Obtém as credenciais de acesso** do ACR.
+5. **Gera o manifesto declarativo YAML** para o Azure Container Instances (Container Group).
+6. **Provisiona o Container Group no ACI** contendo:
+   - **`clyvocare-api`**: Container da API Java (usuário non-root `UID 10001`, porta 8080).
+   - **`oracle-db`**: Container do banco de dados Oracle XE 21 (`gvenzl/oracle-xe:21-slim`, porta 1521).
+7. **Exibe os endereços públicos**, Swagger UI, endpoint OpenAPI e comandos para verificação de logs.
 
-1. **Cria o Resource Group** `sprint1-javaapi-clyvo` na região `East US 2`
-2. **Provisiona a VM Linux** `vm-clyvo` (Standard_D2s_v3 — Ubuntu 24.04 LTS)
-3. **Abre as portas necessárias** — porta 8080 (API) e 22 (SSH já aberta por padrão)
-4. **Instala o Docker** na VM via script oficial
-5. **Instala Git e ferramentas** (nano, curl, wget, unzip)
-6. **Clona o repositório** e cria o `docker-compose.yml` na VM
-7. **Sobe os containers** com `docker compose up --build -d`
+### 3. Acessar e Testar a Aplicação
 
-Ao final o script exibe o IP público da VM e o link do Swagger.
+- **Swagger UI**: `http://<FQDN_OU_IP_PUBLICO>:8080/swagger-ui.html`
+- **OpenAPI JSON**: `http://<FQDN_OU_IP_PUBLICO>:8080/v3/api-docs`
+- **Verificar usuário não-root no container**:
+  ```bash
+  az container exec --resource-group rg-clyvocare-sprint3 --name aci-clyvocare-group --container-name clyvocare-api --exec-command "id"
+  ```
+  *Saída esperada: `uid=10001(appuser) gid=10001(appgroup)`*
 
-### 3. Conectar na VM
+- **Visualizar logs em tempo real**:
+  ```bash
+  # Logs da API Java
+  az container logs --resource-group rg-clyvocare-sprint3 --name aci-clyvocare-group --container-name clyvocare-api --follow
 
-```bash
-ssh admclyvo@<IP_DA_VM>
-```
+  # Logs do Oracle DB
+  az container logs --resource-group rg-clyvocare-sprint3 --name aci-clyvocare-group --container-name oracle-db --follow
+  ```
 
-### 4. Verificar os containers
+### 4. Limpeza dos Recursos (Para economizar créditos)
 
-```bash
-cd Java-Sprint-1
-docker ps
-docker volume ls
-docker inspect clyvocare-api --format '{{.Config.User}}'
-```
-
-### 5. Acessar o Swagger
-
-```
-http://<IP_DA_VM>:8080/swagger-ui.html
-```
-
-### 6. Demonstrar persistência de dados
-
-```bash
-# Para os containers sem destruí-los
-docker compose stop
-
-# Inicia novamente
-docker compose start
-```
-
-> Aguarde ~3-5 minutos para o Oracle XE reinicializar. Os dados inseridos anteriormente estarão preservados graças ao volume nomeado `java-sprint-1_oracle-data`.
-
-### 7. Excluir a VM ao final (obrigatório)
+Ao finalizar a gravação do vídeo e validação dos testes, execute o script de limpeza:
 
 ```bash
-az group delete --name sprint1-javaapi-clyvo --yes --no-wait
+chmod +x azure-cleanup.sh
+./azure-cleanup.sh
 ```
-
-> ⚠️ Este comando remove todos os recursos criados: VM, disco, IP público, rede e NSG.
 
 ---
 
-## Containerização — Dockerfile
+## Containerização — Dockerfile (Non-Root User)
 
-O `Dockerfile` na raiz do projeto usa multi-stage build para manter a imagem final leve:
+O `Dockerfile` na raiz do projeto utiliza multi-stage build e configuração estrita de usuário sem privilégios administrativos:
 
 ```dockerfile
-# Stage 1: build
-FROM maven:3.9-eclipse-temurin-23 AS build
+# Stage 1: Build
+FROM maven:3.9-eclipse-temurin-23-alpine AS build
 WORKDIR /app
 COPY pom.xml .
 COPY src ./src
 RUN mvn clean package -DskipTests
 
-# Stage 2: runtime
+# Stage 2: Runtime
 FROM eclipse-temurin:23-jre-alpine
 WORKDIR /app
 
-# Usuário sem privilégios administrativos
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-USER appuser
+# Criando grupo e usuário sem privilégios administrativos (Non-Root)
+RUN addgroup -g 10001 -S appgroup && \
+    adduser -u 10001 -S appuser -G appgroup
 
-COPY --from=build /app/target/*.jar app.jar
+COPY --from=build --chown=appuser:appgroup /app/target/*.jar app.jar
+
+USER 10001:10001
+
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-Djava.security.egd=file:/dev/./urandom", "-jar", "app.jar"]
 ```
 
 > A API roda com usuário `appuser` sem privilégios root, atendendo ao requisito de segurança da disciplina.
