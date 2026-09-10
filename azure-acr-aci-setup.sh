@@ -49,21 +49,34 @@ SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 echo -e "Assinatura Ativa: ${GREEN}$SUBSCRIPTION_NAME ($SUBSCRIPTION_ID)${NC}"
 
 echo -e "
-${YELLOW}=== 2. Criando Resource Group ($RESOURCE_GROUP na região $LOCATION) ===${NC}"
+${YELLOW}=== 2. Registrando Resource Providers necessários ===${NC}"
+for RP in Microsoft.ContainerRegistry Microsoft.ContainerInstance; do
+    RP_STATE=$(az provider show --namespace "$RP" --query registrationState -o tsv 2>/dev/null || echo "NotRegistered")
+    if [ "$RP_STATE" != "Registered" ]; then
+        echo -e "  Registrando $RP (assinatura nova; pode levar alguns minutos)..."
+        az provider register --namespace "$RP" --wait
+        echo -e "  ${GREEN}$RP registrado.${NC}"
+    else
+        echo -e "  $RP: ${GREEN}já registrado${NC}."
+    fi
+done
+
+echo -e "
+${YELLOW}=== 3. Criando Resource Group ($RESOURCE_GROUP na região $LOCATION) ===${NC}"
 az group create --name "$RESOURCE_GROUP" --location "$LOCATION" --output table
 
 echo -e "
-${YELLOW}=== 3. Criando Azure Container Registry (SKU Basic - Estudante) ===${NC}"
+${YELLOW}=== 4. Criando Azure Container Registry (SKU Basic - Estudante) ===${NC}"
 az acr create     --resource-group "$RESOURCE_GROUP"     --name "$ACR_NAME"     --sku Basic     --admin-enabled true     --location "$LOCATION"     --output table
 
-echo -e "\n${YELLOW}=== 4. Obtendo Credenciais e Autenticando no ACR ===${NC}"
+echo -e "\n${YELLOW}=== 5. Obtendo Credenciais e Autenticando no ACR ===${NC}"
 ACR_LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --resource-group "$RESOURCE_GROUP" --query loginServer -o tsv)
 ACR_USERNAME=$(az acr credential show --name "$ACR_NAME" --resource-group "$RESOURCE_GROUP" --query username -o tsv)
 ACR_PASSWORD=$(az acr credential show --name "$ACR_NAME" --resource-group "$RESOURCE_GROUP" --query "passwords[0].value" -o tsv)
 
 echo "$ACR_PASSWORD" | docker login "$ACR_LOGIN_SERVER" -u "$ACR_USERNAME" --password-stdin
 
-echo -e "\n${YELLOW}=== 5. Efetuando Build & Push da imagem da API via Docker ===${NC}"
+echo -e "\n${YELLOW}=== 6. Efetuando Build & Push da imagem da API via Docker ===${NC}"
 echo -e "Construindo imagem multi-stage localmente: $ACR_LOGIN_SERVER/clyvocare-api:v1 ..."
 docker build -t "$ACR_LOGIN_SERVER/clyvocare-api:v1" .
 
@@ -71,7 +84,7 @@ echo -e "Enviando imagem para o Azure Container Registry ($ACR_LOGIN_SERVER)..."
 docker push "$ACR_LOGIN_SERVER/clyvocare-api:v1"
 
 echo -e "
-${YELLOW}=== 6. Gerando manifesto declarativo para o Container Group (Multi-Container: App + Oracle) ===${NC}"
+${YELLOW}=== 7. Gerando manifesto declarativo para o Container Group (Multi-Container: App + Oracle) ===${NC}"
 ACI_YAML_FILE="aci-deployment.generated.yaml"
 
 cat <<EOF > "$ACI_YAML_FILE"
@@ -129,11 +142,11 @@ properties:
 EOF
 
 echo -e "
-${YELLOW}=== 7. Provisionando Container Group no ACI ($CONTAINER_GROUP_NAME) ===${NC}"
+${YELLOW}=== 8. Provisionando Container Group no ACI ($CONTAINER_GROUP_NAME) ===${NC}"
 az container create     --resource-group "$RESOURCE_GROUP"     --file "$ACI_YAML_FILE"
 
 echo -e "
-${YELLOW}=== 8. Obtendo informações de rede do ACI ===${NC}"
+${YELLOW}=== 9. Obtendo informações de rede do ACI ===${NC}"
 ACI_IP=$(az container show --resource-group "$RESOURCE_GROUP" --name "$CONTAINER_GROUP_NAME" --query ipAddress.ip -o tsv)
 ACI_FQDN=$(az container show --resource-group "$RESOURCE_GROUP" --name "$CONTAINER_GROUP_NAME" --query ipAddress.fqdn -o tsv)
 
