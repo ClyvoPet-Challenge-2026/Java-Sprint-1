@@ -114,8 +114,8 @@ Usuário / Browser / Insomnia
 Pré-requisitos no ambiente:
 
 - Java 17+ instalado e disponível no `PATH`
-- Acesso à VPN da FIAP (caso queira conectar no `oracle.fiap.com.br`) ou Docker local para subir o Oracle XE (`docker compose up oracle-db -d`)
-- Schema Oracle estruturado: `script_bd.sql` recria o schema com todas as tabelas CORE, comentários e dados de demonstração (ver [Schema do banco](#schema-do-banco))
+- Acesso à VPN da FIAP (para conectar no `oracle.fiap.com.br`) ou um Oracle próprio via `SPRING_DATASOURCE_URL`
+- Contra a FIAP o Flyway registra o baseline sobre o schema existente; contra um banco vazio o Flyway aplica V1 + V2 e o `DataInitializer` carrega os dados de exemplo (ver [Schema do banco](#schema-do-banco))
 
 O par de chaves RSA que assina o JWT já está versionado em `src/main/resources/keys/` (chaves de demonstração). Para um deploy real, gere um par novo (precisa de OpenSSL):
 
@@ -594,6 +594,12 @@ Java-Sprint-1/
 O schema é versionado por **Flyway**. A V1 histórica cria 15 tabelas e permanece inalterada para preservar os checksums já registrados. A `V2__subscription_enums.sql` converte `STATUS_ID` e `PAYMENT_METHOD_ID` em textos e remove as duas tabelas auxiliares, deixando **13 tabelas de aplicação**. O Hibernate usa `ddl-auto=validate`.
 
 > O versionamento por Flyway é exercido contra o Oracle da FIAP (o esquema já existe: baseline 1, V2 aplicada). O deploy ACI sobe um Oracle XE efêmero acessado como `system` — cenário em que o baseline do Flyway não roda o V1. Por isso o container sobrescreve, apenas nesse ambiente, `SPRING_FLYWAY_ENABLED=false` e `SPRING_JPA_HIBERNATE_DDL_AUTO=update`, deixando o Hibernate criar o schema. O `application.properties` versionado permanece com Flyway ligado e `validate`.
+
+### Dados de demonstração
+
+As migrations Flyway só criam o schema — não inserem dados. A carga de exemplo tem uma única fonte: a classe `config/DataInitializer`, que roda no boot e, se as tabelas estiverem vazias, insere estados, cidades, espécies, raças, planos e dois usuários (`ana@email.com` / ADMIN e `carlos@email.com` / OWNER, senha `senha123`). É controlada por `app.seed.enabled` (default `true`); definir `false` desliga a carga. Contra o Oracle da FIAP, que já tem dados, ela não faz nada.
+
+O `docs/script.sql` é um artefato separado, da disciplina de Database: recriação manual completa (DDL + seeds + PL/SQL), com `DROP TABLE`. Não é executado pela aplicação.
 
 - **Banco existente no modelo antigo:** a V2 preserva IDs, datas e valores das contratações. A conversão usa nomes dos cadastros antigos, sem fixar seus IDs.
 - **Banco vazio:** o Flyway aplica V1 e V2. Os dados de demonstração não fazem parte das migrations.
