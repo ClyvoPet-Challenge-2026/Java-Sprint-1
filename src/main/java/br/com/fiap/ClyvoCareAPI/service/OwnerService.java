@@ -34,6 +34,13 @@ public class OwnerService {
         );
     }
 
+    public Owner findOwnerByEmail(String email) {
+        return ownerRepository.findByEmail(email).orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        String.format("Owner with email %s not found", email))
+        );
+    }
+
     public Owner createOwner(OwnerRequest request) {
         if (ownerRepository.existsByCpf(request.cpf())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,

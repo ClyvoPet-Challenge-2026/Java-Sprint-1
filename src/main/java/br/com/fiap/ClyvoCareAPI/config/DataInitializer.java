@@ -5,6 +5,7 @@ import br.com.fiap.ClyvoCareAPI.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
@@ -14,6 +15,7 @@ import java.util.List;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@ConditionalOnProperty(name = "app.seed.enabled", havingValue = "true", matchIfMissing = true)
 public class DataInitializer implements CommandLineRunner {
 
     private final StateRepository stateRepository;
@@ -30,7 +32,7 @@ public class DataInitializer implements CommandLineRunner {
             initStatesAndCities();
             initSpeciesAndBreeds();
             initPlans();
-            initDefaultAdmin();
+            initDefaultUsers();
             log.info("ClyvoCare API - Carga inicial de dados concluída com sucesso.");
         } catch (Exception e) {
             log.warn("ClyvoCare API - Carga inicial já executada ou ignorada: {}", e.getMessage());
@@ -101,22 +103,32 @@ public class DataInitializer implements CommandLineRunner {
         }
     }
 
-    private void initDefaultAdmin() {
-        if (!ownerRepository.existsByEmail("ana@email.com")) {
-            var defaultCity = cityRepository.findAll().stream().findFirst().orElse(null);
-            if (defaultCity != null) {
-                ownerRepository.save(Owner.builder()
-                        .name("Ana Paula Souza")
-                        .cpf("111.111.111-11")
-                        .email("ana@email.com")
-                        .passwordHash(passwordEncoder.encode("senha123"))
-                        .roleName("ADMIN")
-                        .enabled(true)
-                        .phone("(11) 91111-1111")
-                        .city(defaultCity)
-                        .build()
-                );
-            }
+    private void initDefaultUsers() {
+        var defaultCity = cityRepository.findAll().stream().findFirst().orElse(null);
+        if (defaultCity == null) {
+            return;
         }
+        createOwnerIfMissing("ana@email.com", "Ana Paula Souza", "111.111.111-11",
+                "(11) 91111-1111", "ADMIN", defaultCity);
+        createOwnerIfMissing("carlos@email.com", "Carlos Henrique Lima", "222.222.222-22",
+                "(11) 92222-2222", "OWNER", defaultCity);
+    }
+
+    private void createOwnerIfMissing(String email, String name, String cpf, String phone,
+                                     String roleName, City city) {
+        if (ownerRepository.existsByEmail(email)) {
+            return;
+        }
+        ownerRepository.save(Owner.builder()
+                .name(name)
+                .cpf(cpf)
+                .email(email)
+                .passwordHash(passwordEncoder.encode("senha123"))
+                .roleName(roleName)
+                .enabled(true)
+                .phone(phone)
+                .city(city)
+                .build()
+        );
     }
 }
