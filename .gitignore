@@ -38,3 +38,6 @@ Thumbs.db
 
 ### Docker ###
 docker-compose.yml
+
+### Azure ###
+aci-deployment.generated.yaml
