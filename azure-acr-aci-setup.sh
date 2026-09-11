@@ -137,6 +137,10 @@ properties:
             value: "system"
           - name: SPRING_DATASOURCE_PASSWORD
             value: "$ORACLE_PWD"
+          - name: SPRING_FLYWAY_ENABLED
+            value: "false"
+          - name: SPRING_JPA_HIBERNATE_DDL_AUTO
+            value: "update"
         ports:
           - port: 8080
 EOF
@@ -151,8 +155,26 @@ ACI_IP=$(az container show --resource-group "$RESOURCE_GROUP" --name "$CONTAINER
 ACI_FQDN=$(az container show --resource-group "$RESOURCE_GROUP" --name "$CONTAINER_GROUP_NAME" --query ipAddress.fqdn -o tsv)
 
 echo -e "
+${YELLOW}=== 10. Aguardando a API responder (Oracle XE leva alguns minutos) ===${NC}"
+API_READY=0
+for i in $(seq 1 60); do
+    if curl -sf -o /dev/null "http://$ACI_FQDN:8080/v3/api-docs"; then
+        API_READY=1
+        echo -e "${GREEN}API respondendo em http://$ACI_FQDN:8080${NC}"
+        break
+    fi
+    echo -e "  tentativa $i/60 — ainda inicializando, nova checagem em 10s..."
+    sleep 10
+done
+if [ "$API_READY" -eq 0 ]; then
+    echo -e "${RED}[AVISO] A API não respondeu em 10 minutos. Verifique os logs antes de testar:${NC}"
+    echo -e "  ${YELLOW}az container logs --resource-group $RESOURCE_GROUP --name $CONTAINER_GROUP_NAME --container-name clyvocare-api${NC}"
+    echo -e "  ${YELLOW}az container logs --resource-group $RESOURCE_GROUP --name $CONTAINER_GROUP_NAME --container-name oracle-db${NC}"
+fi
+
+echo -e "
 ${GREEN}======================================================================${NC}"
-echo -e "${GREEN}   DEPLOY CONCLUÍDO COM SUCESSO NO AZURE ACR + ACI (mexicocentral)    ${NC}"
+echo -e "${GREEN}   DEPLOY CONCLUÍDO NO AZURE ACR + ACI (mexicocentral)               ${NC}"
 echo -e "${GREEN}======================================================================${NC}"
 echo -e "IP Público ACI:        ${CYAN}http://$ACI_IP:8080${NC}"
 echo -e "FQDN ACI:              ${CYAN}http://$ACI_FQDN:8080${NC}"

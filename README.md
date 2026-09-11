@@ -178,6 +178,8 @@ O script executa em sequência:
 
 ### 3. Acessar e Testar a Aplicação
 
+O `azure-acr-aci-setup.sh` já aguarda a API responder antes de finalizar (o Oracle XE do container leva de 2 a 4 minutos para inicializar, e a API reinicia até o banco aceitar conexão). Se for rodar `azure-acr-aci-test.sh` ou a collection manualmente, aguarde o script imprimir `API respondendo` ou confirme com `curl http://<FQDN>:8080/v3/api-docs`.
+
 - **Swagger UI**: `http://<FQDN_OU_IP_PUBLICO>:8080/swagger-ui.html`
 - **OpenAPI JSON**: `http://<FQDN_OU_IP_PUBLICO>:8080/v3/api-docs`
 - **Verificar usuário não-root no container**:
@@ -590,6 +592,8 @@ Java-Sprint-1/
 ## Schema do banco
 
 O schema é versionado por **Flyway**. A V1 histórica cria 15 tabelas e permanece inalterada para preservar os checksums já registrados. A `V2__subscription_enums.sql` converte `STATUS_ID` e `PAYMENT_METHOD_ID` em textos e remove as duas tabelas auxiliares, deixando **13 tabelas de aplicação**. O Hibernate usa `ddl-auto=validate`.
+
+> O versionamento por Flyway é exercido contra o Oracle da FIAP (o esquema já existe: baseline 1, V2 aplicada). O deploy ACI sobe um Oracle XE efêmero acessado como `system` — cenário em que o baseline do Flyway não roda o V1. Por isso o container sobrescreve, apenas nesse ambiente, `SPRING_FLYWAY_ENABLED=false` e `SPRING_JPA_HIBERNATE_DDL_AUTO=update`, deixando o Hibernate criar o schema. O `application.properties` versionado permanece com Flyway ligado e `validate`.
 
 - **Banco existente no modelo antigo:** a V2 preserva IDs, datas e valores das contratações. A conversão usa nomes dos cadastros antigos, sem fixar seus IDs.
 - **Banco vazio:** o Flyway aplica V1 e V2. Os dados de demonstração não fazem parte das migrations.
