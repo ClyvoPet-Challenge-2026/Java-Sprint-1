@@ -2,39 +2,66 @@ type: collection.insomnia.rest/5.0
 schema_version: "5.1"
 name: ClyvoCareJava
 meta:
-  id: wrk_1409bfc6de26433281242a9ad7bb7ad0
-  created: 1779317141069
-  modified: 1779317141069
-  description: ""
+  id: wrk_clyvocare_java
+  created: 1789000000000
+  modified: 1789000000000
+  description: >-
+    Collection de testes da API ClyvoCare (Java / Spring Boot).
+
+    COMO USAR
+    1. Selecione o environment: "Base Environment" (localhost) ou "Azure ACI".
+       No "Azure ACI", troque base_url pelo FQDN do container:
+       http://<FQDN>.mexicocentral.azurecontainer.io:8080
+       (pegue com: az container show -g <RG> -n aci-clyvocare-group --query ipAddress.fqdn -o tsv)
+    2. Rode "00 - Autenticacao > Login". Ele guarda o token em access_token
+       automaticamente; todas as rotas protegidas ja usam esse token.
+    3. Rode as pastas na ordem 01 -> 05. As requests de cadastro (Responsavel,
+       Pet, Contratacao) guardam o id gerado em owner_id / pet_id /
+       subscription_id, entao o Fluxo A e o Fluxo B funcionam em sequencia.
+
+    USUARIOS SEEDADOS (DataInitializer): ana@email.com / senha123 (ADMIN).
+    Enums: paymentMethod = PIX | DEBIT_CARD | CREDIT_CARD | BOLETO ;
+           status = ACTIVE | PENDING | INACTIVE.
 collection:
-  - name: 01-Estados
+  - name: 00 - Autenticacao
     meta:
-      id: fld_a46ddca136454094b0a37da2f97193bf
-      created: 1779317475389
-      modified: 1779317475389
-      sortKey: -1779317475390
-      description: ""
+      id: fld_00_auth
+      created: 1789000000000
+      modified: 1789000000000
+      sortKey: -6000
+      description: "Login publico. Guarda o JWT em access_token via script de after-response."
     children:
-      - url: "{{ _['base_url '].base_url }}/estados"
-        name: PostEstado
+      - url: "{{ _.base_url }}/auth/login"
+        name: Login (ADMIN)
         meta:
-          id: req_2bf8ba1b537048aa998f0842f4026eb5
-          created: 1779317724966
-          modified: 1779367252770
+          id: req_auth_login
+          created: 1789000000000
+          modified: 1789000000000
           isPrivate: false
-          description: ""
-          sortKey: -1779317724966
+          sortKey: -500
+          description: "POST /auth/login publico. Retorna { token }. O script guarda o token no environment."
         method: POST
         body:
           mimeType: application/json
-          text: '{ "name": "São Paulo", "uf": "SP" }'
+          text: |-
+            {
+              "email": "ana@email.com",
+              "password": "senha123"
+            }
         headers:
           - name: Content-Type
             value: application/json
-          - name: User-Agent
-            value: insomnia/12.5.0
-            description: ""
-            disabled: false
+        scripts:
+          afterResponse: |-
+            try {
+              const data = insomnia.response.json();
+              if (data && data.token) {
+                insomnia.environment.set('access_token', data.token);
+                console.log('access_token atualizado');
+              }
+            } catch (e) {
+              console.log('Login: resposta sem token', e);
+            }
         settings:
           renderRequestBody: true
           encodeUrl: true
@@ -43,34 +70,26 @@ collection:
             send: true
             store: true
           rebuildPath: true
-  - name: 02-Cidades
-    meta:
-      id: fld_bb89cea414054396bd30909a966ef051
-      created: 1779317484674
-      modified: 1779317484674
-      sortKey: -1779317484674
-      description: ""
-    children:
-      - url: "{{ _['base_url '].base_url }}/cidades"
-        name: PostCidade
+      - url: "{{ _.base_url }}/auth/login"
+        name: Login senha errada (espera 401)
         meta:
-          id: req_c70598370bf9473dbb571b44fbd6a8e0
-          created: 1779317795485
-          modified: 1779318339262
+          id: req_auth_login_bad
+          created: 1789000000000
+          modified: 1789000000000
           isPrivate: false
-          description: ""
-          sortKey: -1779317795485
+          sortKey: -450
+          description: "Demonstra a rejeicao de credencial invalida."
         method: POST
         body:
           mimeType: application/json
-          text: '{ "name": "Pederneiras", "stateId": 1 }'
+          text: |-
+            {
+              "email": "ana@email.com",
+              "password": "errada"
+            }
         headers:
           - name: Content-Type
             value: application/json
-          - name: User-Agent
-            value: insomnia/12.5.0
-            description: ""
-            disabled: false
         settings:
           renderRequestBody: true
           encodeUrl: true
@@ -79,322 +98,280 @@ collection:
             send: true
             store: true
           rebuildPath: true
-  - name: 03-Especies
+  - name: 01 - Lookups (GET)
     meta:
-      id: fld_c4d9f4679ae643368df00413c307891c
-      created: 1779317494130
-      modified: 1779317494130
-      sortKey: -1779317494130
-      description: ""
+      id: fld_01_lookups
+      created: 1789000000000
+      modified: 1789000000000
+      sortKey: -5000
+      description: "Consultas das tabelas de apoio. Exigem token (qualquer perfil autenticado)."
     children:
-      - url: "{{ _['base_url '].base_url }}/especies"
-        name: PostEspecie
-        meta:
-          id: req_bee5b05559e34ea3be8ba4bc3dc78403
-          created: 1779317846251
-          modified: 1779318415820
-          isPrivate: false
-          description: ""
-          sortKey: -1779317846251
-        method: POST
-        body:
-          mimeType: application/json
-          text: '{ "name": "Felino" }'
-        headers:
-          - name: Content-Type
-            value: application/json
-          - name: User-Agent
-            value: insomnia/12.5.0
-            description: ""
-            disabled: false
-        settings:
-          renderRequestBody: true
-          encodeUrl: true
-          followRedirects: global
-          cookies:
-            send: true
-            store: true
-          rebuildPath: true
-  - name: 04-Raças
-    meta:
-      id: fld_145c25cc94de44c29db3be8b6555f917
-      created: 1779317502380
-      modified: 1779317502380
-      sortKey: -1779317502380
-      description: ""
-    children:
-      - url: "{{ _['base_url '].base_url }}/racas"
-        name: PostEspecie
-        meta:
-          id: req_5cc3909856c84549a4b075850b962f45
-          created: 1779317889878
-          modified: 1779318509907
-          isPrivate: false
-          description: ""
-          sortKey: -1779317889878
-        method: POST
-        body:
-          mimeType: application/json
-          text: ' { "name": "SRD(SEM-RAÇA-DEFINIDA)", "speciesId": 1 }'
-        headers:
-          - name: Content-Type
-            value: application/json
-          - name: User-Agent
-            value: insomnia/12.5.0
-            description: ""
-            disabled: false
-        settings:
-          renderRequestBody: true
-          encodeUrl: true
-          followRedirects: global
-          cookies:
-            send: true
-            store: true
-          rebuildPath: true
-  - name: 05-Planos
-    meta:
-      id: fld_9a5d3b1ecc624b9a97f8c040e4cc8761
-      created: 1779317509241
-      modified: 1779317509241
-      sortKey: -1779317509241
-      description: ""
-    children:
-      - url: "{{ _['base_url '].base_url }}/planos"
-        name: PostPlano
-        meta:
-          id: req_f0567439b24649a0950148884475a323
-          created: 1779317919100
-          modified: 1779318520095
-          isPrivate: false
-          description: ""
-          sortKey: -1779317919100
-        method: POST
-        body:
-          mimeType: application/json
-          text: '{ "name": "Ouro", "monthlyValue": 119.90 }'
-        headers:
-          - name: Content-Type
-            value: application/json
-          - name: User-Agent
-            value: insomnia/12.5.0
-            description: ""
-            disabled: false
-        settings:
-          renderRequestBody: true
-          encodeUrl: true
-          followRedirects: global
-          cookies:
-            send: true
-            store: true
-          rebuildPath: true
-  - name: 06-FormasDePagamento
-    meta:
-      id: fld_59f66095e4f744f48e9dfadd4766820c
-      created: 1779317520830
-      modified: 1779317520830
-      sortKey: -1779317520830
-      description: ""
-    children:
-      - url: "{{ _['base_url '].base_url }}/formas-pagamento"
-        name: GetFormasPagamento
-        meta:
-          id: req_976cd5fed76746349086c1e7c44fb600
-          created: 1779317948232
-          modified: 1779368474418
-          isPrivate: false
-          description: ""
-          sortKey: -1779317948232
+      - url: "{{ _.base_url }}/planos"
+        name: GET Planos
+        meta: { id: req_get_planos, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -500, description: "" }
         method: GET
-        headers:
-          - name: Content-Type
-            value: application/json
-          - name: User-Agent
-            value: insomnia/12.5.0
-            description: ""
-            disabled: false
-        settings:
-          renderRequestBody: true
-          encodeUrl: true
-          followRedirects: global
-          cookies:
-            send: true
-            store: true
-          rebuildPath: true
-  - name: 07-StatusContratação
-    meta:
-      id: fld_a1b2576950f7438cbe3d7138d6a0f696
-      created: 1779317535675
-      modified: 1779317535675
-      sortKey: -1779317535675
-      description: ""
-    children:
-      - url: "{{ _['base_url '].base_url }}/status-contratacao"
-        name: GetStatusContratacao
-        meta:
-          id: req_7131e5dff5c548fdb657ac4dfcdb6889
-          created: 1779317975508
-          modified: 1779318539993
-          isPrivate: false
-          description: ""
-          sortKey: -1779317975508
-        method: GET
-        headers:
-          - name: Content-Type
-            value: application/json
-          - name: User-Agent
-            value: insomnia/12.5.0
-            description: ""
-            disabled: false
-        settings:
-          renderRequestBody: true
-          encodeUrl: true
-          followRedirects: global
-          cookies:
-            send: true
-            store: true
-          rebuildPath: true
-  - name: 08-Responsaveis
-    meta:
-      id: fld_ce9a6ab8598245a3acd1f602d88b364d
-      created: 1779317544629
-      modified: 1779317544629
-      sortKey: -1779317544629
-      description: ""
-    children:
-      - url: "{{ _['base_url '].base_url }}/responsaveis"
-        name: PostResponsavel
-        meta:
-          id: req_04087a1699a0401abb63beacf13b8d01
-          created: 1779318008493
-          modified: 1779318546471
-          isPrivate: false
-          description: ""
-          sortKey: -1779318008493
-        method: POST
-        body:
-          mimeType: application/json
-          text: |2-
-             {
-                "name": "Orlando Gonçalves",
-                "cpf": "390.533.447-05",
-                "email": "orlando@email.com",
-                "password": "Doidera123",
-                "phone": "(11) 98765-4321",
-                "cityId": 1
-              }
-        headers:
-          - name: Content-Type
-            value: application/json
-          - name: User-Agent
-            value: insomnia/12.5.0
-            description: ""
-            disabled: false
-        settings:
-          renderRequestBody: true
-          encodeUrl: true
-          followRedirects: global
-          cookies:
-            send: true
-            store: true
-          rebuildPath: true
-  - name: 09-Pets
-    meta:
-      id: fld_da642232f8ae4f3eb5a7b5084f936616
-      created: 1779317550467
-      modified: 1779317550467
-      sortKey: -1779317550467
-      description: ""
-    children:
-      - url: "{{ _['base_url '].base_url }}/pets"
-        name: PostPet
-        meta:
-          id: req_c3e535af6ab44b279ae0a0a2023b79a2
-          created: 1779318086894
-          modified: 1779318562960
-          isPrivate: false
-          description: ""
-          sortKey: -1779318086894
-        method: POST
-        body:
-          mimeType: application/json
-          text: |2-
-              {
-                "name": "Miwi",
-                "birthDate": "2012-03-15",
-                "sex": "FEMALE",
-                "ownerId": 1,
-                "speciesId": 1,
-                "breedId": 1
-              }
-        headers:
-          - name: Content-Type
-            value: application/json
-          - name: User-Agent
-            value: insomnia/12.5.0
-            description: ""
-            disabled: false
-        settings:
-          renderRequestBody: true
-          encodeUrl: true
-          followRedirects: global
-          cookies:
-            send: true
-            store: true
-          rebuildPath: true
-  - name: 10-Contratações
-    meta:
-      id: fld_237b3c878c1b4ee48c7fb1922e061ec7
-      created: 1779317557103
-      modified: 1779317557103
-      sortKey: -1779317557103
-      description: ""
-    children:
-      - url: "{{ _['base_url '].base_url }}/contratacoes"
-        name: PostContratacao
-        meta:
-          id: req_c55b1ad98c9a4c80a51f295553593273
-          created: 1779318142675
-          modified: 1779361896254
-          isPrivate: false
-          description: ""
-          sortKey: -1779318142675
-        method: POST
-        body:
-          mimeType: application/json
-          text: |2-
-              {
-                "petId": 1,
-                "planId": 1,
-                "paymentMethod": "PIX"
-              }
         headers:
           - name: Authorization
             value: "Bearer {{ _.access_token }}"
-          - name: Content-Type
-            value: application/json
-          - name: User-Agent
-            value: insomnia/12.5.0
-            description: ""
-            disabled: false
-        settings:
-          renderRequestBody: true
-          encodeUrl: true
-          followRedirects: global
-          cookies:
-            send: true
-            store: true
-          rebuildPath: true
-      - url: "{{ _['base_url '].base_url }}/contratacoes/simulacao"
-        name: PostSimulacaoContratacao
-        meta:
-          id: req_f891d55c59b44859b220671d59a81ae9
-          isPrivate: false
-          description: ""
-          sortKey: -1779318142676
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+      - url: "{{ _.base_url }}/especies"
+        name: GET Especies
+        meta: { id: req_get_especies, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -450, description: "" }
+        method: GET
+        headers:
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+      - url: "{{ _.base_url }}/racas"
+        name: GET Racas
+        meta: { id: req_get_racas, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -400, description: "" }
+        method: GET
+        headers:
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+      - url: "{{ _.base_url }}/estados"
+        name: GET Estados
+        meta: { id: req_get_estados, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -350, description: "" }
+        method: GET
+        headers:
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+      - url: "{{ _.base_url }}/estados"
+        name: GET Estados sem token (espera 401)
+        meta: { id: req_get_estados_noauth, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -340, description: "Prova que a rota e protegida." }
+        method: GET
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+      - url: "{{ _.base_url }}/cidades"
+        name: GET Cidades
+        meta: { id: req_get_cidades, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -300, description: "" }
+        method: GET
+        headers:
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+      - url: "{{ _.base_url }}/formas-pagamento"
+        name: GET Formas de Pagamento
+        meta: { id: req_get_formas, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -250, description: "Enum: CREDIT_CARD, DEBIT_CARD, BOLETO, PIX" }
+        method: GET
+        headers:
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+      - url: "{{ _.base_url }}/status-contratacao"
+        name: GET Status de Contratacao
+        meta: { id: req_get_status, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -200, description: "Enum: ACTIVE, PENDING, INACTIVE" }
+        method: GET
+        headers:
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+  - name: 02 - Cadastros (POST - ADMIN)
+    meta:
+      id: fld_02_cadastros
+      created: 1789000000000
+      modified: 1789000000000
+      sortKey: -4000
+      description: "Escrita nas tabelas de apoio. Exige perfil ADMIN. Valores escolhidos para nao colidir com os seeds."
+    children:
+      - url: "{{ _.base_url }}/estados"
+        name: POST Estado
+        meta: { id: req_post_estado, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -500, description: "" }
         method: POST
         body:
           mimeType: application/json
-          text: |
+          text: |-
+            {
+              "name": "Espirito Santo",
+              "uf": "ES"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+      - url: "{{ _.base_url }}/cidades"
+        name: POST Cidade
+        meta: { id: req_post_cidade, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -400, description: "stateId 1 = primeiro estado seedado (SP)." }
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "name": "Sorocaba",
+              "stateId": 1
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+      - url: "{{ _.base_url }}/especies"
+        name: POST Especie
+        meta: { id: req_post_especie, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -300, description: "" }
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "name": "Ferret"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+      - url: "{{ _.base_url }}/racas"
+        name: POST Raca
+        meta: { id: req_post_raca, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -200, description: "speciesId 1 = primeira especie seedada (Dog)." }
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "name": "Vira-lata",
+              "speciesId": 1
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+      - url: "{{ _.base_url }}/planos"
+        name: POST Plano
+        meta: { id: req_post_plano, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -100, description: "" }
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "name": "Plano Teste",
+              "monthlyValue": 59.90
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+  - name: 03 - Responsaveis e Pets
+    meta:
+      id: fld_03_owners_pets
+      created: 1789000000000
+      modified: 1789000000000
+      sortKey: -3000
+      description: "POST /responsaveis e publico (auto-cadastro, forca perfil OWNER). O resto exige token."
+    children:
+      - url: "{{ _.base_url }}/responsaveis"
+        name: POST Responsavel (publico)
+        meta: { id: req_post_owner, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -500, description: "Guarda o id gerado em owner_id. Se der 409 de CPF/email, troque os valores." }
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "name": "Tutor Collection",
+              "cpf": "529.982.247-25",
+              "email": "tutor.collection@clyvocare.com",
+              "password": "SenhaTutor123",
+              "phone": "(11) 98888-7777",
+              "cityId": 1
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: |-
+            try {
+              const data = insomnia.response.json();
+              if (data && data.id != null) {
+                insomnia.environment.set('owner_id', String(data.id));
+                console.log('owner_id =', data.id);
+              }
+            } catch (e) { console.log('POST responsavel sem id', e); }
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+      - url: "{{ _.base_url }}/responsaveis"
+        name: GET Responsaveis (ADMIN)
+        meta: { id: req_get_owners, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -400, description: "" }
+        method: GET
+        headers:
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+      - url: "{{ _.base_url }}/responsaveis/{{ _.owner_id }}"
+        name: GET Responsavel por ID
+        meta: { id: req_get_owner_id, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -350, description: "" }
+        method: GET
+        headers:
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+      - url: "{{ _.base_url }}/pets"
+        name: POST Pet
+        meta: { id: req_post_pet, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -300, description: "Guarda o id gerado em pet_id. speciesId 1 = Dog, breedId 1 = primeira raca de Dog." }
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "name": "Rex Collection",
+              "birthDate": "2022-05-10",
+              "sex": "MALE",
+              "ownerId": {{ _.owner_id }},
+              "speciesId": 1,
+              "breedId": 1
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        scripts:
+          afterResponse: |-
+            try {
+              const data = insomnia.response.json();
+              if (data && data.id != null) {
+                insomnia.environment.set('pet_id', String(data.id));
+                console.log('pet_id =', data.id);
+              }
+            } catch (e) { console.log('POST pet sem id', e); }
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+      - url: "{{ _.base_url }}/pets"
+        name: GET Pets
+        meta: { id: req_get_pets, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -200, description: "" }
+        method: GET
+        headers:
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+      - url: "{{ _.base_url }}/pets/{{ _.pet_id }}"
+        name: GET Pet por ID
+        meta: { id: req_get_pet_id, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -100, description: "" }
+        method: GET
+        headers:
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+  - name: 04 - Fluxo A - Simulacao e Contratacao
+    meta:
+      id: fld_04_fluxo_a
+      created: 1789000000000
+      modified: 1789000000000
+      sortKey: -2000
+      description: "Desconto por forma de pagamento (PIX -5%, DEBIT_CARD -3%), status inicial ACTIVE, bloqueio de contratacao ativa duplicada por pet."
+    children:
+      - url: "{{ _.base_url }}/contratacoes/simulacao"
+        name: POST Simulacao (PIX)
+        meta: { id: req_post_sim, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -500, description: "Nao persiste. Retorna baseValue / discountRate / discountAmount / finalValue." }
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
             {
               "planId": 1,
               "paymentMethod": "PIX"
@@ -404,55 +381,83 @@ collection:
             value: application/json
           - name: Authorization
             value: "Bearer {{ _.access_token }}"
-        settings:
-          renderRequestBody: true
-          encodeUrl: true
-          followRedirects: global
-          cookies:
-            send: true
-            store: true
-          rebuildPath: true
-      - url: "{{ _['base_url '].base_url }}/contratacoes/{{ _.subscription_id }}"
-        name: PutContratacao
-        meta:
-          id: req_3653b1aaef6942a7a81bda468c1ba308
-          isPrivate: false
-          description: ""
-          sortKey: -1779318142674
-        method: PUT
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+      - url: "{{ _.base_url }}/contratacoes"
+        name: POST Contratacao
+        meta: { id: req_post_sub, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -400, description: "Guarda o id em subscription_id. Cria com status ACTIVE e valor com desconto." }
+        method: POST
         body:
           mimeType: application/json
-          text: |
+          text: |-
             {
-              "petId": 1,
+              "petId": {{ _.pet_id }},
               "planId": 1,
-              "paymentMethod": "DEBIT_CARD"
+              "paymentMethod": "PIX"
             }
         headers:
           - name: Content-Type
             value: application/json
           - name: Authorization
             value: "Bearer {{ _.access_token }}"
-        settings:
-          renderRequestBody: true
-          encodeUrl: true
-          followRedirects: global
-          cookies:
-            send: true
-            store: true
-          rebuildPath: true
-
-      - url: "{{ _['base_url '].base_url }}/contratacoes/{{ _.subscription_id }}/status"
-        name: PatchStatusContratacao
-        meta:
-          id: req_98314614cd1f4e60ad727e5c494d6e1a
-          isPrivate: false
-          description: ""
-          sortKey: -1779318142673
+        scripts:
+          afterResponse: |-
+            try {
+              const data = insomnia.response.json();
+              if (data && data.id != null) {
+                insomnia.environment.set('subscription_id', String(data.id));
+                console.log('subscription_id =', data.id);
+              }
+            } catch (e) { console.log('POST contratacao sem id', e); }
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+      - url: "{{ _.base_url }}/contratacoes"
+        name: POST Contratacao duplicada (espera 409)
+        meta: { id: req_post_sub_dup, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -350, description: "Mesmo pet ja tem contratacao ACTIVE -> 409." }
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "petId": {{ _.pet_id }},
+              "planId": 1,
+              "paymentMethod": "PIX"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+      - url: "{{ _.base_url }}/contratacoes"
+        name: GET Contratacoes
+        meta: { id: req_get_subs, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -300, description: "" }
+        method: GET
+        headers:
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+      - url: "{{ _.base_url }}/contratacoes/{{ _.subscription_id }}"
+        name: GET Contratacao por ID
+        meta: { id: req_get_sub_id, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -200, description: "" }
+        method: GET
+        headers:
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+  - name: 05 - Fluxo B - Ciclo de Vida
+    meta:
+      id: fld_05_fluxo_b
+      created: 1789000000000
+      modified: 1789000000000
+      sortKey: -1000
+      description: "Maquina de estados. Transicoes validas: ACTIVE<->PENDING, ACTIVE/PENDING->INACTIVE. INACTIVE e terminal. Troca de plano so em ACTIVE/PENDING. Rode em ordem."
+    children:
+      - url: "{{ _.base_url }}/contratacoes/{{ _.subscription_id }}/status"
+        name: PATCH Status -> PENDING
+        meta: { id: req_patch_pending, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -500, description: "ACTIVE -> PENDING (valido)." }
         method: PATCH
         body:
           mimeType: application/json
-          text: |
+          text: |-
             {
               "status": "PENDING"
             }
@@ -461,27 +466,16 @@ collection:
             value: application/json
           - name: Authorization
             value: "Bearer {{ _.access_token }}"
-        settings:
-          renderRequestBody: true
-          encodeUrl: true
-          followRedirects: global
-          cookies:
-            send: true
-            store: true
-          rebuildPath: true
-      - url: "{{ _['base_url '].base_url }}/contratacoes/{{ _.subscription_id }}/troca-plano"
-        name: PostTrocaPlanoContratacao
-        meta:
-          id: req_842d2ed153724112a0d81fd6ad80b624
-          isPrivate: false
-          description: ""
-          sortKey: -1779318142672
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+      - url: "{{ _.base_url }}/contratacoes/{{ _.subscription_id }}/troca-plano"
+        name: POST Troca de Plano
+        meta: { id: req_post_troca, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -400, description: "Permitido em PENDING. Recalcula o preco com o novo plano/pagamento." }
         method: POST
         body:
           mimeType: application/json
-          text: |
+          text: |-
             {
-              "planId": 2,
+              "planId": 3,
               "paymentMethod": "DEBIT_CARD"
             }
         headers:
@@ -489,30 +483,120 @@ collection:
             value: application/json
           - name: Authorization
             value: "Bearer {{ _.access_token }}"
-        settings:
-          renderRequestBody: true
-          encodeUrl: true
-          followRedirects: global
-          cookies:
-            send: true
-            store: true
-          rebuildPath: true
-
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+      - url: "{{ _.base_url }}/contratacoes/{{ _.subscription_id }}"
+        name: PUT Contratacao
+        meta: { id: req_put_sub, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -300, description: "Atualiza pet/plano/pagamento e recalcula o preco, preservando o status." }
+        method: PUT
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "petId": {{ _.pet_id }},
+              "planId": 2,
+              "paymentMethod": "BOLETO"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+      - url: "{{ _.base_url }}/contratacoes/{{ _.subscription_id }}/status"
+        name: PATCH Status -> ACTIVE
+        meta: { id: req_patch_active, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -250, description: "PENDING -> ACTIVE (valido)." }
+        method: PATCH
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "status": "ACTIVE"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+      - url: "{{ _.base_url }}/contratacoes/{{ _.subscription_id }}/status"
+        name: PATCH Status -> INACTIVE
+        meta: { id: req_patch_inactive, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -200, description: "ACTIVE -> INACTIVE (valido). Encerra a contratacao." }
+        method: PATCH
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "status": "INACTIVE"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+      - url: "{{ _.base_url }}/contratacoes/{{ _.subscription_id }}/status"
+        name: PATCH Status -> ACTIVE (espera 409 - terminal)
+        meta: { id: req_patch_terminal, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -150, description: "INACTIVE e terminal -> 409." }
+        method: PATCH
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "status": "ACTIVE"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
+      - url: "{{ _.base_url }}/contratacoes/{{ _.subscription_id }}/troca-plano"
+        name: POST Troca de Plano em INACTIVE (espera 409)
+        meta: { id: req_post_troca_inactive, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -100, description: "Troca de plano so vale em ACTIVE/PENDING -> 409." }
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "planId": 4,
+              "paymentMethod": "CREDIT_CARD"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Authorization
+            value: "Bearer {{ _.access_token }}"
+        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
 cookieJar:
   name: Default Jar
   meta:
-    id: jar_1a092bd0ed2726bf89426f8404e3431063cceed2
-    created: 1779317141076
-    modified: 1779317141076
+    id: jar_clyvocare_java
+    created: 1789000000000
+    modified: 1789000000000
 environments:
   name: Base Environment
   meta:
-    id: env_1a092bd0ed2726bf89426f8404e3431063cceed2
-    created: 1779317141074
-    modified: 1779318314415
+    id: env_base_clyvocare
+    created: 1789000000000
+    modified: 1789000000000
     isPrivate: false
   data:
+    base_url: http://localhost:8080
     access_token: ""
-    subscription_id: 1
-    "base_url ":
-      base_url: http://localhost:8080
+    owner_id: "1"
+    pet_id: "1"
+    subscription_id: "1"
+  subEnvironments:
+    - name: Azure ACI
+      meta:
+        id: env_azure_aci
+        created: 1789000000000
+        modified: 1789000000000
+        isPrivate: false
+        sortKey: 0
+      data:
+        base_url: http://SUBSTITUA-PELO-FQDN.mexicocentral.azurecontainer.io:8080
+        access_token: ""
+        owner_id: "1"
+        pet_id: "1"
+        subscription_id: "1"
