@@ -294,6 +294,8 @@ Resposta:
 
 Use o token nas próximas requisições: `Authorization: Bearer <token>`.
 
+`GET /auth/me` (qualquer perfil autenticado) devolve o responsável dono do token.
+
 ### Perfis e proteção de rotas
 
 `TB_CAD_OWNER.ROLE_NAME` guarda o perfil do tutor (`ADMIN` ou `OWNER`). O token carrega esse valor na claim `role`; o Spring Security o expõe como a authority `ROLE_ADMIN` / `ROLE_OWNER`, e cada endpoint declara quem pode acessá-lo via `@PreAuthorize`.
