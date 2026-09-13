@@ -1,414 +1,213 @@
-# 🐾 ClyvoCare API — Cadastros e Contratação
+# ClyvoCare API
 
-API Java do projeto **ClyvoCare**, desenvolvida como parte do Challenge FIAP 2026 (2TDSPG, Java Advanced). É a metade administrativa de um sistema de plano de saúde para pets inspirado em serviços como o Petlove Saúde, cuidando do cadastro de tutores, pets, planos disponíveis e das contratações desses planos.
+API REST para cadastrar tutores, pets e planos de saúde, simular preços e acompanhar contratações. Construída em Spring Boot com Oracle, faz parte do Challenge FIAP 2026, turma 2TDSPG.
 
-O projeto tem uma irmã em C# (.NET Advanced) que cuida da operação clínica em si (clínicas, eventos clínicos, lembretes). As duas APIs compartilham o mesmo banco Oracle FIAP via um schema que serve como contrato entre elas, cada uma sendo dona da escrita das suas próprias tabelas e apenas lendo as do outro contexto quando precisa de informações para exibir.
+Com ela, você pode consultar o catálogo de planos, contratar um plano para um pet e acompanhar seu status. Esta API complementa a [API .NET](https://github.com/ClyvoPet-Challenge-2026/.Net-Sprint-1), responsável pela parte de clínicas veterinárias do projeto.
 
----
+A proposta é reunir o cadastro do tutor, seus pets e suas contratações no mesmo fluxo. Para o tutor, isso permite consultar os planos ativos e seus valores. Para a administração, permite acompanhar contratações, alterar planos e registrar pausas ou encerramentos.
 
-## Índice
+## Como os projetos se complementam
 
-- [Sobre a divisão por domínio](#sobre-a-divisão-por-domínio)
-- [Stack técnica](#stack-técnica)
-- [Benefícios para o Negócio](#benefícios-para-o-negócio)
-- [Arquitetura macro na nuvem](#arquitetura-macro-na-nuvem)
-- [Como executar localmente](#como-executar-localmente)
-- [Como executar na nuvem (Azure ACR + ACI)](#como-executar-na-nuvem-azure-acr--aci)
-- [Containerização — Dockerfile](#containerização--dockerfile)
-- [Arquitetura da aplicação](#arquitetura-da-aplicação)
-- [Autenticação e Autorização](#autenticação-e-autorização)
-- [Status e forma de pagamento](#status-e-forma-de-pagamento)
-- [Endpoints principais](#endpoints-principais)
-- [Testando a API](#testando-a-api)
-- [Estrutura de pastas](#estrutura-de-pastas)
-- [Banco de dados](#banco-de-dados)
-- [Requisitos da disciplina cobertos](#requisitos-da-disciplina-cobertos)
+O ClyvoCare está dividido em repositórios que atendem a partes diferentes da solução e das entregas do Challenge:
 
----
+| Projeto | Papel |
+|---|---|
+| [API Java](https://github.com/ClyvoPet-Challenge-2026/Java-Sprint-1) | Cadastro de tutores, pets e planos; autenticação; simulação e gestão de contratações |
+| [API .NET](https://github.com/ClyvoPet-Challenge-2026/.Net-Sprint-1) | Cadastro e consulta de clínicas veterinárias, com leitura de estados e cidades compartilhados |
+| [Clyvo-Care — mobile](https://github.com/ClyvoPet-Challenge-2026/Clyvo-Care) | Versão mobile das entregas, com a apresentação visual voltada à experiência do aplicativo |
+| [ClyvoCare Web](https://github.com/ClyvoPet-Challenge-2026/Java-Sprint-1-Web) | Camada de visualização em React e Vite criada para demonstrar os fluxos exigidos em Java Advanced |
 
-## Sobre a divisão por domínio
+As APIs Java e .NET trabalham com partes complementares do domínio. A Java mantém os estados e as cidades; a .NET consulta essas tabelas pelo Entity Framework e vincula as clínicas às cidades existentes. Para compartilhar esses dados, configure as duas APIs para usar o mesmo schema Oracle.
 
-A escolha foi separar as duas APIs por **bounded context** (contexto delimitado), e não por questões técnicas como performance. A ideia é simples: uma API cuida de quem somos (cadastros estáveis), a outra cuida do que fazemos pelo pet (jornada de cuidado). Essa fronteira fica explícita no nome dos pacotes, na estrutura do banco e nos pacotes que cada lado pode escrever.
+Na versão atual da .NET, estão implementados o CRUD de clínicas e as consultas de estados e cidades. Eventos clínicos e lembretes fazem parte do escopo previsto para essa API, mas ainda não têm endpoints implementados.
 
-Esta API (Java) é dona de escrita das seguintes tabelas:
+Para conhecer a versão mobile e sua apresentação visual, acesse o repositório **Clyvo-Care**. As instruções de frontend deste README são para o **ClyvoCare Web**, a interface de apoio à entrega de Java Advanced. As duas interfaces correspondem a entregas distintas: frontend em Java Advanced e aplicativo em Mobile Application Development, conforme o enunciado da Sprint 3.
 
-- `TB_CAD_OWNER` — tutores dos pets
-- `TB_CAD_PET` — os pets em si
-- `TB_CAD_PLAN` — catálogo de planos (Essential, Basic, Premium, Master, Total, Corporate)
-- `TB_CAD_SUBSCRIPTION` — contratações de plano feitas pelos tutores
-- `TB_CAD_SPECIES`, `TB_CAD_BREED` — taxonomia de espécies e raças
-- `TB_CAD_STATE`, `TB_CAD_CITY` — localização
+## Como executar
 
-Status e forma de pagamento são enums armazenados nas colunas `STATUS` e `PAYMENT_METHOD` de `TB_CAD_SUBSCRIPTION`, sem tabelas auxiliares.
+Você pode rodar a API na sua máquina usando o Oracle da FIAP ou publicar a API e um Oracle próprio na Azure. Para desenvolver localmente, siga os passos abaixo. Para preparar o ambiente de DevOps da Sprint 3, siga [Deploy no Azure ACR + ACI](#deploy-no-azure-acr--aci).
 
-A API C# escreve em `TB_CAD_CLINIC`, `TB_HEA_CLINICAL_EVENT` e `TB_HEA_REMINDER`, e lê algumas das tabelas acima quando precisa.
+Para rodar a API na sua máquina, você precisa de:
 
----
+- **JDK 17 ou superior**, com `JAVA_HOME` configurado.
+- **Acesso a um banco Oracle**, com usuário e senha. Você pode usar o Oracle da FIAP com as credenciais da sua conta.
+- **Git**, para clonar o repositório.
 
-## Stack técnica
+O Maven Wrapper já está incluído. Você não precisa instalar o Maven separadamente. Docker e Azure CLI só são necessários para o deploy descrito mais abaixo.
 
-| Camada | Tecnologia |
-| --- | --- |
-| Linguagem | Java 17 |
-| Framework | Spring Boot 4.0.6 |
-| Persistência | Spring Data JPA + Hibernate 7 |
-| Banco de dados | Oracle 19c (FIAP) / Oracle XE 21 (deploy em nuvem) |
-| Driver JDBC | ojdbc11 |
-| Migrations | Flyway |
-| Validação | Bean Validation (Hibernate Validator + extensões BR para CPF) |
-| Cache | Spring Cache (in-memory) |
-| Autenticação | JWT stateless assinado com RSA (RS256), via Spring Security |
-| Segurança de senha | Spring Security (`BCryptPasswordEncoder`) |
-| Documentação | SpringDoc OpenAPI (Swagger UI) |
-| Boilerplate | Lombok |
-| Build | Maven |
-| Containerização | Docker (multi-stage build, usuário non-root) |
-| Nuvem | Microsoft Azure — Container Registry + Container Instances (ACR + ACI) |
+### Configurando a conexão
 
----
-
-## Benefícios para o Negócio
-
-O ClyvoCare resolve um problema real do mercado pet brasileiro: a fragmentação e informalidade no acompanhamento de saúde dos animais. Ao digitalizar o cadastro de tutores, pets, planos e contratações em uma API robusta e escalável, o sistema oferece:
-
-- **Gestão centralizada** de toda a base de clientes e seus pets em um único sistema
-- **Rastreabilidade completa** do histórico de contratações por pet, permitindo análises de churn e upsell
-- **Flexibilidade de planos** com 6 tiers (Essential a Corporate), cobrindo diferentes perfis de tutor e pet
-- **Segurança de dados** com senhas hasheadas em BCrypt e validação rigorosa de CPF e e-mail
-- **Escalabilidade na nuvem** via containerização Docker no Azure, permitindo crescimento sem reconfiguração de infraestrutura
-- **Integração nativa** com a API clínica (.NET), formando um ecossistema completo de saúde pet
-
----
-
-## Arquitetura macro na nuvem
-
-```
-Usuário / Browser / Insomnia
-            |
-       HTTP :8080
-            |
-   Microsoft Azure — Região mexicocentral (Resource Group: rg-clyvocare-sprint3)
-   ┌────────────────────────────────────────────────────────────────────────┐
-   │  Azure Container Registry (ACR) — SKU Basic                            │
-   │  Armazena a imagem Docker: clyvocare-api:v1                            │
-   └───────────────────────────────────┬────────────────────────────────────┘
-                                        │ pull image
-   ┌───────────────────────────────────▼────────────────────────────────────┐
-   │  Azure Container Instances (ACI) — Container Group                     │
-   │  FQDN: http://<label>.mexicocentral.azurecontainer.io:8080             │
-   │                                                                        │
-   │  ┌─────────────────────────────┐        ┌────────────────────────────┐ │
-   │  │ clyvocare-api               │        │ oracle-db                  │ │
-   │  │ Spring Boot                 │  JDBC  │ Oracle XE 21-slim          │ │
-   │  │ Porta: 8080 (pública)       ├───────►│ Porta: 1521 (interna)      │ │
-   │  │ Usuário non-root (UID 10001)│        │ Database: XEPDB1           │ │
-   │  │ CPU: 1.0 | RAM: 1.5 GB      │        │ CPU: 1.0 | RAM: 2.5 GB     │ │
-   │  └─────────────────────────────┘        └────────────────────────────┘ │
-   └────────────────────────────────────────────────────────────────────────┘
-```
-
-> Requisitos de DevOps cumpridos por este deploy: solução 100% containerizada (API e banco em containers separados no mesmo Container Group); todos os recursos provisionados via Azure CLI; região `mexicocentral` (compatível com assinaturas Azure for Students); container da aplicação rodando como usuário non-root (`UID 10001`); DDL com estrutura e comentários entregue em `script_bd.sql`.
-
----
-
-## Como executar localmente
-
-Pré-requisitos no ambiente:
-
-- Java 17+ instalado e disponível no `PATH`
-- Acesso à VPN da FIAP (para conectar no `oracle.fiap.com.br`) ou um Oracle próprio via `SPRING_DATASOURCE_URL`
-- Contra a FIAP o Flyway registra o baseline sobre o schema existente; contra um banco vazio o Flyway aplica V1 + V2 e o `DataInitializer` carrega os dados de exemplo (ver [Banco de dados](#banco-de-dados))
-
-O par de chaves RSA que assina o JWT já está versionado em `src/main/resources/keys/` (chaves de demonstração). Para um deploy real, gere um par novo (precisa de OpenSSL):
+Clone o projeto e entre na pasta:
 
 ```bash
-openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out src/main/resources/keys/private_key.pem
-openssl rsa -pubout -in src/main/resources/keys/private_key.pem -out src/main/resources/keys/public_key.pem
+git clone https://github.com/ClyvoPet-Challenge-2026/Java-Sprint-1.git
+cd Java-Sprint-1
 ```
 
-Rodando a aplicação:
+Defina a conexão no mesmo terminal em que você vai iniciar a aplicação. Substitua os valores de usuário e senha pelos da sua conta Oracle.
+
+No **Bash ou Git Bash**:
 
 ```bash
+export SPRING_DATASOURCE_URL='jdbc:oracle:thin:@oracle.fiap.com.br:1521:ORCL'
+export SPRING_DATASOURCE_USERNAME='SEU_USUARIO'
+export SPRING_DATASOURCE_PASSWORD='SUA_SENHA'
 ./mvnw spring-boot:run
 ```
 
-Por padrão a API sobe na porta `8080`. Se você precisar de outra porta, sobrescreva com `--server.port=XXXX` ou edite o `application.properties`.
+No **PowerShell**:
 
----
+```powershell
+$env:SPRING_DATASOURCE_URL = 'jdbc:oracle:thin:@oracle.fiap.com.br:1521:ORCL'
+$env:SPRING_DATASOURCE_USERNAME = 'SEU_USUARIO'
+$env:SPRING_DATASOURCE_PASSWORD = 'SUA_SENHA'
+.\mvnw.cmd spring-boot:run
+```
 
-## Como executar na nuvem (Azure ACR + ACI)
+Se você inicia a API pela IDE, configure essas mesmas variáveis na configuração de execução. Para usar outro Oracle, ajuste também a URL JDBC.
 
-### Pré-requisitos
+As credenciais acima conectam a aplicação ao banco. O login da interface usa os usuários cadastrados em `TB_CAD_OWNER`, apresentados na próxima seção.
 
-- [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli) instalado
-- Assinatura Azure ativa (Azure for Students)
-- Docker Desktop instalado e em execução — o script builda a imagem localmente e envia pro ACR via `docker push`
+### O que acontece ao iniciar
 
-### 1. Login na Azure
+Na execução normal, o Flyway aplica as migrations pendentes antes de o Hibernate validar as tabelas. Em um schema vazio da aplicação, ele cria a estrutura e carrega os dados de demonstração. Você não precisa executar o script SQL manual.
+
+Se o schema já tem tabelas, leia [Banco de dados e migrations](#banco-de-dados-e-migrations): o projeto usa baseline para trabalhar com bancos existentes.
+
+Depois da inicialização, os endereços são:
+
+| Endereço | Uso |
+|---|---|
+| `http://localhost:8080` | Base da API |
+| `http://localhost:8080/swagger-ui.html` | Documentação interativa |
+| `http://localhost:8080/v3/api-docs` | Contrato OpenAPI em JSON |
+
+A raiz da API não é uma página de apresentação. Para navegar pelos fluxos da entrega de Java Advanced, inicie também a interface web descrita abaixo. As instruções da versão mobile ficam no repositório [Clyvo-Care](https://github.com/ClyvoPet-Challenge-2026/Clyvo-Care).
+
+### Acessando a camada de visualização de Java Advanced
+
+Em outro terminal, clone o [ClyvoCare Web](https://github.com/ClyvoPet-Challenge-2026/Java-Sprint-1-Web). Essa interface React/Vite consome a API Java para demonstrar login, pets e contratações. Você precisa de Node.js compatível com o Vite atual do projeto, por exemplo Node 22.12 ou superior, e npm.
 
 ```bash
-az login
-az account set --subscription "NOME_OU_ID_DA_SUA_ASSINATURA"
+git clone https://github.com/ClyvoPet-Challenge-2026/Java-Sprint-1-Web.git
+cd Java-Sprint-1-Web
+cp .env.example .env
 ```
 
-### 2. Executar o script de provisionamento automatizado
+No PowerShell, você pode usar `Copy-Item .env.example .env`. No arquivo `.env`, configure:
 
-O script `azure-acr-aci-setup.sh`, na raiz do projeto, roda de dentro de um terminal já aberto (não por duplo-clique — veja o aviso abaixo):
+```dotenv
+VITE_API_BASE_URL=http://localhost:8080
+```
+
+Depois, instale as dependências e inicie a interface:
 
 ```bash
-chmod +x azure-acr-aci-setup.sh
-./azure-acr-aci-setup.sh
+npm install
+npm run dev
 ```
 
-Ele executa, em sequência:
+Acesse `http://localhost:5173`. As contas de demonstração são:
 
-1. Verifica a autenticação no Azure CLI
-2. Registra os resource providers `Microsoft.ContainerRegistry` e `Microsoft.ContainerInstance` (idempotente — necessário em assinaturas novas)
-3. Cria o Resource Group `rg-clyvocare-sprint3`
-4. Cria o Azure Container Registry (SKU Basic)
-5. Obtém as credenciais do ACR e autentica o Docker local
-6. Builda a imagem da API (multi-stage) e envia para o ACR
-7. Gera o manifesto declarativo do Container Group (API + Oracle XE)
-8. Provisiona o Container Group no ACI
-9. Obtém IP e FQDN públicos
-10. Aguarda a API responder em `/v3/api-docs` (o Oracle XE leva de 2 a 4 minutos para inicializar) antes de imprimir o resumo final
+| E-mail | Senha inicial | Perfil |
+|---|---|---|
+| `ana@email.com` | `senha123` | `ADMIN` |
+| `carlos@email.com` | `senha123` | `OWNER` |
 
-> ⚠️ **Não rode o script com duplo-clique.** Isso abre uma janela temporária que fecha sozinha assim que ele termina, levando a saída (com a URL do deploy) junto. Abra um terminal (Git Bash) e rode o comando de dentro dele.
+A carga preserva senhas já personalizadas. A senha acima vale para contas criadas pela carga e para os placeholders antigos corrigidos pela V3.
 
-### 3. Onde pegar a URL pra testar
+Na interface, você encontra o cadastro de pets, a simulação e contratação de planos e a página **Meus planos**, que mostra as contratações ativas dos seus pets. O perfil `ADMIN` também tem acesso à gestão de status das contratações.
 
-O FQDN muda a cada execução do script. Isso não é um problema: o deploy fica salvo no Azure, então **qualquer terminal, a qualquer momento depois**, com acesso à assinatura (`az login`), recupera a URL vigente:
+O CORS permite `http://localhost:5173` e `http://localhost:3000` por padrão. Se você usar outro endereço ou porta, defina `CORS_ALLOWED_ORIGINS` na API com a origem exata do frontend. Para mais de uma origem, separe os endereços por vírgula.
 
-```bash
-az container show --resource-group rg-clyvocare-sprint3 --name aci-clyvocare-group --query ipAddress.fqdn -o tsv
-```
+## Banco de dados e migrations
 
-Confirma que está no ar:
+As migrations ficam em [src/main/resources/db/migration](src/main/resources/db/migration). Na execução normal, elas controlam a estrutura e a carga inicial; o Hibernate usa `ddl-auto=validate` para conferir se o banco corresponde às entidades.
 
-```bash
-az container show --resource-group rg-clyvocare-sprint3 --name aci-clyvocare-group --query instanceView.state -o tsv
-```
-(deve responder `Running`)
+| Migration | Responsabilidade |
+|---|---|
+| `V1__create_baseline_schema.sql` | Cria a estrutura inicial, com 15 tabelas |
+| `V2__subscription_enums.sql` | Converte status e pagamento para texto, remove duas tabelas auxiliares e atualiza funções, procedimentos e trigger |
+| `V3__seed_demo_data.sql` | Inclui os dados de demonstração ausentes e corrige as contas legadas de Ana e Carlos |
 
-Com o FQDN em mãos (`http://<fqdn>:8080`):
+Após a V2, o schema tem 13 tabelas de aplicação. Ele inclui `TB_CAD_CLINIC`, usada pela API .NET, e as tabelas de eventos clínicos e lembretes previstas para a evolução dessa área. A existência dessas tabelas não significa que todos os respectivos endpoints já estejam implementados.
 
-- **Swagger UI**: `http://<fqdn>:8080/swagger-ui.html`
-- **OpenAPI JSON**: `http://<fqdn>:8080/v3/api-docs`
-- **Collection Insomnia**: importe `docs/clyvo-care-api.yaml`, selecione o environment **Azure ACI** e cole o FQDN em `base_url` (ver [Testando a API](#testando-a-api))
+### Usando um banco que já tem dados
 
-Outros comandos úteis:
+Com `spring.flyway.baseline-on-migrate=true`, um schema preenchido e ainda sem histórico do Flyway recebe um baseline na versão 1. Nesse caso, a V1 é considerada anterior ao ponto de partida e as migrations seguintes são aplicadas.
 
-```bash
-# Confirma que o container roda sem privilégios de root
-az container exec --resource-group rg-clyvocare-sprint3 --name aci-clyvocare-group --container-name clyvocare-api --exec-command "id"
-# Saída esperada: uid=10001(appuser) gid=10001(appgroup)
+Isso pressupõe que as tabelas existentes sejam compatíveis com o modelo esperado. O baseline não reconstrói uma estrutura incompleta. A V2 trata algumas diferenças legadas, como a ausência de `ROLE_NAME` e `ENABLED`, e interrompe a conversão se encontrar status ou pagamentos sem correspondência.
 
-# Logs em tempo real
-az container logs --resource-group rg-clyvocare-sprint3 --name aci-clyvocare-group --container-name clyvocare-api --follow
-az container logs --resource-group rg-clyvocare-sprint3 --name aci-clyvocare-group --container-name oracle-db --follow
-```
+O Flyway registra as versões aplicadas em `flyway_schema_history`. Reiniciar a API não repete a carga já registrada. Para alterar uma migration aplicada, crie uma nova versão; editar V1 ou V2 muda o checksum que o Flyway usa para validar o histórico.
 
-### 4. Limpeza dos recursos (para economizar créditos)
+### Como os dados de demonstração são carregados
 
-Ao finalizar a validação e a gravação do vídeo, execute o script de limpeza:
+A V3 inclui estados, cidades, espécies, raças, planos e dois usuários. Ela procura cada registro por seus campos de identificação, como UF, nome ou e-mail, sem depender de IDs fixos. Assim, também consegue completar tabelas parcialmente preenchidas.
 
-```bash
-chmod +x azure-cleanup.sh
-./azure-cleanup.sh
-```
+Nos registros existentes, a migration preserva os cadastros e preços. Para as contas de demonstração, ela:
 
----
+- Substitui somente `hash1` de Ana e `hash2` de Carlos por BCrypt de `senha123`.
+- Ajusta Ana para `ADMIN` e Carlos para `OWNER`.
+- Preserva outras senhas e a situação de habilitação das contas existentes.
 
-## Containerização — Dockerfile
+O `DataInitializer` fica como alternativa para ambientes com Flyway explicitamente desabilitado, como o script ACI atual. A propriedade `app.seed.enabled=false` desativa essa alternativa Java; ela não desativa a V3.
 
-O `Dockerfile` na raiz do projeto usa multi-stage build e roda com um usuário sem privilégios administrativos:
+### Script SQL e objetos de banco
 
-```dockerfile
-# Stage 1: Build
-FROM maven:3.9-eclipse-temurin-23-alpine AS build
-WORKDIR /app
-COPY pom.xml .
-COPY src ./src
-RUN mvn clean package -DskipTests
+[script_bd.sql](script_bd.sql) e [docs/script.sql](docs/script.sql) são os scripts completos da entrega de Database. Eles contêm criação de tabelas, dados e PL/SQL, incluindo comandos de exclusão de tabelas. **Você não precisa executá-los para iniciar a API com Flyway.**
 
-# Stage 2: Runtime
-FROM eclipse-temurin:23-jre-alpine
-WORKDIR /app
+O diagrama de modelagem está em [docs/MER.png](docs/MER.png). Entre os objetos de banco estão:
 
-# Criando grupo e usuário sem privilégios administrativos (Non-Root)
-RUN addgroup -g 10001 -S appgroup && \
-    adduser -u 10001 -S appuser -G appgroup
+| Objeto | Uso |
+|---|---|
+| `FN_SUBSCRIPTION_TO_JSON` | Monta o JSON de uma contratação com seus relacionamentos |
+| `FN_CALCULATE_CONTRACT_VALUE` | Calcula o valor do plano conforme o pagamento |
+| `SP_REPORT_SUBSCRIPTIONS_JSON` | Exibe contratações em JSON, com filtro de status |
+| `SP_REPORT_REVENUE_FACT` | Exibe valores agrupados por plano e status, com subtotais |
+| `TRG_SUBSCRIPTION_AUDIT` | Registra inclusões, alterações e exclusões de contratações |
 
-COPY --from=build --chown=appuser:appgroup /app/target/*.jar app.jar
+O cálculo usado pela API está em `ContractPricingService`. A função SQL mantém as mesmas taxas para uso no banco; o serviço Java não chama essa função.
 
-USER 10001:10001
+## Autenticação e permissões
 
-EXPOSE 8080
-ENTRYPOINT ["java", "-Djava.security.egd=file:/dev/./urandom", "-Djava.net.preferIPv4Stack=true", "-jar", "app.jar"]
-```
+Para obter um token, envie e-mail e senha:
 
-> A API roda com o usuário `appuser`, sem privilégios de root, atendendo ao requisito de segurança de contêiner da disciplina de DevOps.
-
----
-
-## Arquitetura da aplicação
-
-A API segue uma arquitetura em camadas bem tradicional do mundo Spring, sem muita ginástica arquitetural — o foco é clareza e cobertura dos requisitos da disciplina, não criar abstrações desnecessárias.
-
-```
-Controller (REST)  -->  Service (lógica + cache + validação de FK)  -->  Repository (JPA)  -->  Oracle
-       |                          |
-       v                          v
-     DTOs                     Entities
-```
-
-A regra prática: o Controller só conhece DTOs (Request e Response), o Service trabalha com entidades JPA e regras de negócio, o Repository fala com o banco. A conversão entre DTO e Entity acontece nas bordas (`request.toEntity(...)` na entrada, `Response.fromEntity(entity)` na saída), seguindo um padrão de records imutáveis.
-
-**Senhas com BCrypt.** Toda senha de tutor passa pelo `PasswordEncoder` do Spring Security (`BCryptPasswordEncoder`) antes de ser salva. O campo `passwordHash` da entidade tem `@JsonIgnore`, então mesmo se alguém esquecer de filtrar no DTO, a senha nunca vaza no JSON de resposta.
-
-**Cache nas listagens estáveis.** Estados e Cidades são marcados com `@Cacheable`. Quando alguém faz POST/PUT/DELETE nesses recursos, `@CacheEvict` limpa tudo. Para entidades de negócio (Owner, Pet, Subscription) não usamos cache porque o volume de mudanças é maior e o risco de servir dado stale supera o benefício.
-
-**Validação de FK no Service, não no banco.** Antes de inserir uma Cidade, por exemplo, o `CityService` consulta o `StateService` para garantir que o estado informado existe. Se não existe, lança 404 com mensagem clara em vez de deixar o Oracle gritar `ORA-02291`.
-
-**Tratamento global de erros.** A classe `ValidationHandler` (anotada com `@RestControllerAdvice`) captura dois tipos de exceção e devolve JSON consistente:
-
-- `MethodArgumentNotValidException` (erros de Bean Validation) → 400 com lista `[{field, message}]`
-- `ResponseStatusException` (404s do `findById`, 409s de conflito) → 400/404/409 com `{status, message}`
-
-**Paginação onde faz sentido.** Lookups pequenos (Estados, Espécies, Planos) devolvem `List<T>` direto. Já as entidades de negócio (Owner, Pet, Subscription) usam `Pageable` no GET, com filtros opcionais via query params.
-
----
-
-## Autenticação e Autorização
-
-A API usa **JWT stateless** (sem sessão/cookie), via Spring Security + OAuth2 Resource Server. A escolha é deliberada: o frontend roda em repositório e domínio separados, e sessão/cookie exige mesma origem — o token no header `Authorization` não tem essa restrição.
-
-O JWT é assinado com **RSA (RS256)**: a API guarda um par de chaves em `src/main/resources/keys/`, o `AuthController` assina com a privada no login, e o `SecurityConfig` valida com a pública em cada request. O par versionado é de demonstração; para produção, gere um par novo e injete por variável de ambiente / secret.
-
-### Login
-
-```
+```http
 POST /auth/login
 Content-Type: application/json
 
 {
-    "email": "carlos@email.com",
-    "password": "senha123"
+  "email": "carlos@email.com",
+  "password": "senha123"
 }
 ```
 
-Resposta:
+A resposta contém um campo `token`. Copie o valor e envie nas próximas requisições:
 
-```json
-{ "token": "eyJhbGciOiJSUzI1NiJ9..." }
+```http
+Authorization: Bearer <token>
 ```
 
-Use o token nas próximas requisições: `Authorization: Bearer <token>`.
+O JWT vale por 30 minutos e é assinado com RSA (RS256). As chaves incluídas em `src/main/resources/keys` são de demonstração. As senhas são armazenadas com BCrypt, e o login também verifica se a conta está habilitada.
 
-`GET /auth/me` (qualquer perfil autenticado) devolve o responsável dono do token.
+Use `GET /auth/me` para consultar os dados do usuário autenticado. O cadastro público em `POST /responsaveis` cria contas com perfil `OWNER`.
 
-### Perfis e proteção de rotas
+| Recurso | Consulta | Criação | Edição e exclusão |
+|---|---|---|---|
+| Responsáveis | `ADMIN` | Pública | `ADMIN` |
+| Pets | Usuário autenticado | `ADMIN` ou `OWNER` | `ADMIN` ou `OWNER` |
+| Contratações | Usuário autenticado | `ADMIN` ou `OWNER` | `ADMIN` |
+| Estados, cidades, espécies, raças e planos | Usuário autenticado | `ADMIN` | `ADMIN` |
 
-`TB_CAD_OWNER.ROLE_NAME` guarda o perfil do tutor (`ADMIN` ou `OWNER`). O token carrega esse valor na claim `role`; o Spring Security o expõe como a authority `ROLE_ADMIN` / `ROLE_OWNER`, e cada endpoint declara quem pode acessá-lo via `@PreAuthorize`.
+A simulação aceita `ADMIN` e `OWNER`. Mudança de status e troca de plano exigem `ADMIN`. O Swagger e o login são públicos; as demais consultas exigem token.
 
-| Recurso | GET | POST | PUT | DELETE |
-|---|---|---|---|---|
-| `/responsaveis` | ADMIN | público (auto-cadastro) | ADMIN | ADMIN |
-| `/pets` | qualquer logado | ADMIN ou OWNER | ADMIN ou OWNER | ADMIN ou OWNER |
-| `/contratacoes` | qualquer logado | ADMIN ou OWNER | ADMIN | ADMIN |
-| Lookups (planos, estados, cidades, espécies, raças) | qualquer logado | ADMIN | ADMIN | ADMIN |
-| `/status-contratacao`, `/formas-pagamento` | qualquer logado | — | — | — |
+A consulta `GET /contratacoes/minhas` filtra pelo usuário do JWT e retorna somente seus planos ativos. Nas rotas gerais de pets e contratações, a implementação atual não restringe os registros ao dono do token: o filtro usado nas telas de tutor não substitui essa validação no backend.
 
-Rotas de fluxo de `/contratacoes`:
+## Fluxos de contratação
 
-| Rota | Perfil |
-|---|---|
-| `POST /contratacoes/simulacao` | ADMIN ou OWNER |
-| `PATCH /contratacoes/{id}/status` | ADMIN |
-| `POST /contratacoes/{id}/troca-plano` | ADMIN |
+### Simular e contratar um plano
 
-`/auth/login`, `/auth/me` (autenticado) e o Swagger (`/swagger-ui/**`, `/v3/api-docs/**`) são as únicas rotas fora do padrão acima, além do `POST /responsaveis` (público).
-
-### Usuários de teste (seed de demonstração)
-
-| Email | Senha | Perfil |
-|---|---|---|
-| `ana@email.com` | `senha123` | ADMIN |
-| `carlos@email.com` | `senha123` | OWNER |
-
-### CORS
-
-O frontend (React + Vite) roda em outra origem. `CorsConfig` libera `GET/POST/PUT/PATCH/DELETE/OPTIONS` e os headers `Authorization`/`Content-Type` para as origens em `cors.allowed-origins` (default: `http://localhost:5173` e `http://localhost:3000`). Em produção, definir `CORS_ALLOWED_ORIGINS` com a URL do front.
-
----
-
-## Status e forma de pagamento
-
-Os dois campos usam `@Enumerated(EnumType.STRING)` e colunas `VARCHAR2(20)` na contratação, protegidas por constraints no Oracle:
-
-| Campo JSON / coluna Oracle | Enum Java | Valores |
-|---|---|---|
-| `status` / `STATUS` | `SubscriptionStatus` | `ACTIVE`, `INACTIVE`, `PENDING` |
-| `paymentMethod` / `PAYMENT_METHOD` | `PaymentMethod` | `CREDIT_CARD`, `DEBIT_CARD`, `BOLETO`, `PIX` |
-
-`ACTIVE` indica contratação ativa; `PENDING`, pausada ou aguardando regularização; `INACTIVE`, encerrada definitivamente. Uma contratação encerrada não pode ser reativada; o pet pode receber uma nova contratação.
-
-- POST e PUT recebem `petId`, `planId` e `paymentMethod`. O POST define `ACTIVE` no backend; o PUT preserva o status atual. As respostas incluem `status` e `paymentMethod` como strings.
-- Filtros: `GET /contratacoes?status=ACTIVE&paymentMethod=PIX`.
-- `GET /status-contratacao` e `GET /formas-pagamento` retornam listas fixas, sem consultar o banco. Essas rotas não possuem criação, edição, exclusão ou consulta por ID.
-- IDs obrigatórios devem ser positivos. `paymentMethod` ausente, nulo, desconhecido ou numérico retorna HTTP 400; filtros de enum inválidos também retornam 400.
-
-`ContractPricingService` aplica **5% para PIX e 3% para cartão de débito**; crédito e boleto não têm desconto. O cálculo é compartilhado pela simulação, pelo cadastro, pelo PUT e pela troca de plano, com arredondamento monetário para duas casas. A função Oracle `FN_CALCULATE_CONTRACT_VALUE` segue as mesmas taxas.
-
-`POST /contratacoes/simulacao` retorna o preço do plano, a taxa e o valor do desconto e o preço final, sem criar contratação. Na confirmação, o backend consulta novamente o preço do plano e grava o valor calculado.
-
-Um pet pode ter apenas uma contratação `ACTIVE` criada ou ativada por esses fluxos. Cadastro, atualização de contratação ativa e ativação de uma contratação `PENDING` validam duplicidade sob bloqueio do pet dentro de uma transação; conflito retorna HTTP 409. Nas alterações, a consulta exclui o próprio registro. PUT, troca de plano e mudança de status também bloqueiam a contratação durante a operação, para evitar que alterações concorrentes sobrescrevam um encerramento.
-
----
-
-## Endpoints principais
-
-Documentação completa interativa está no Swagger UI em `http://localhost:8080/swagger-ui.html` (ou `http://<fqdn>:8080/swagger-ui.html` no deploy). Exceto `POST /auth/login` e `POST /responsaveis`, todo endpoint abaixo exige `Authorization: Bearer <token>` (ver [Autenticação e Autorização](#autenticação-e-autorização)).
-
-### Cadastro de um responsável (tutor do pet)
-
-```
-POST /responsaveis
-Content-Type: application/json
-
-{
-    "name": "Ana Paula Souza",
-    "cpf": "529.982.247-25",
-    "email": "ana@email.com",
-    "password": "minhasenha123",
-    "phone": "(11) 91111-1111",
-    "cityId": 1
-}
-```
-
-### Listar responsáveis com busca e paginação
-
-```
-GET /responsaveis?name=ana&page=0&size=10&sort=name,asc
-```
-
-### Cadastro de um pet
-
-```
-POST /pets
-Content-Type: application/json
-
-{
-    "name": "Rex",
-    "birthDate": "2020-03-10",
-    "sex": "MALE",
-    "ownerId": 1,
-    "speciesId": 1,
-    "breedId": 1
-}
-```
-
-### Simulação antes de contratar
+Primeiro, consulte `GET /planos` e escolha um plano. Os IDs variam conforme o banco, então use os valores retornados pela API nos exemplos abaixo.
 
 ```http
 POST /contratacoes/simulacao
@@ -416,264 +215,403 @@ Authorization: Bearer <token>
 Content-Type: application/json
 
 {
-    "planId": 1,
-    "paymentMethod": "PIX"
+  "planId": 1,
+  "paymentMethod": "PIX"
 }
 ```
 
-Para um plano de R$ 69,90, a resposta HTTP 200 é:
+A simulação devolve o valor base, a taxa de desconto, o desconto em reais e o valor final. Ela não cria uma contratação.
+
+| Pagamento | Valor enviado na API | Desconto |
+|---|---|---|
+| Pix | `PIX` | 5% |
+| Cartão de débito | `DEBIT_CARD` | 3% |
+| Cartão de crédito | `CREDIT_CARD` | Sem desconto |
+| Boleto | `BOLETO` | Sem desconto |
+
+Por exemplo, um plano de R$ 69,90 pago por Pix fica em R$ 66,41. O serviço arredonda o valor final para duas casas e calcula o desconto em reais pela diferença, R$ 3,49 nesse caso.
+
+Para confirmar, envie também o pet:
+
+```http
+POST /contratacoes
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "petId": 1,
+  "planId": 1,
+  "paymentMethod": "PIX"
+}
+```
+
+A API consulta o preço novamente, calcula o valor e cria a contratação com status `ACTIVE`. O frontend não define o preço final nem o status inicial.
+
+Um pet só pode receber uma contratação ativa por esses fluxos. Se já houver outra, a API responde `409 Conflict`. Depois de contratar, você pode consultar `GET /contratacoes/minhas` ou abrir **Meus planos** na interface.
+
+### Pausar, encerrar ou trocar um plano
+
+O administrador pode alterar o status com `PATCH /contratacoes/{id}/status`:
 
 ```json
 {
-    "baseValue": 69.90,
-    "discountRate": 0.05,
-    "discountAmount": 3.49,
-    "finalValue": 66.41
+  "status": "PENDING"
 }
 ```
 
-A simulação e a criação são permitidas para `ADMIN` e `OWNER` autenticados.
-
-### Contratação de um plano
-
-```
-POST /contratacoes
-Content-Type: application/json
-
-{
-    "petId": 1,
-    "planId": 1,
-    "paymentMethod": "PIX"
-}
-```
-
-A criação retorna HTTP 201 com status `ACTIVE` e o preço calculado. Se o pet já tiver contratação ativa, retorna HTTP 409.
-
-### Atualizar uma contratação
-
-```
-PUT /contratacoes/1
-Content-Type: application/json
-
-{
-    "petId": 1,
-    "planId": 1,
-    "paymentMethod": "PIX"
-}
-```
-
-O PUT exige `ADMIN`, preserva o status e recalcula o preço conforme plano e pagamento informados. Assim como a troca de plano, só aceita contratações `ACTIVE` ou `PENDING`; uma contratação `INACTIVE` retorna HTTP 409.
-
-### Ciclo de vida da contratação
-
-```http
-PATCH /contratacoes/1/status
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-    "status": "PENDING"
-}
-```
-
-As transições seguem esta tabela:
+As transições permitidas são:
 
 | Status atual | Pode mudar para |
 |---|---|
-| `ACTIVE` | `PENDING`, `INACTIVE` |
-| `PENDING` | `ACTIVE`, `INACTIVE` |
-| `INACTIVE` | Nenhum — encerramento definitivo |
+| `ACTIVE` — ativo | `PENDING` ou `INACTIVE` |
+| `PENDING` — pendente ou pausado | `ACTIVE` ou `INACTIVE` |
+| `INACTIVE` — encerrado | Nenhum |
 
-Uma transição válida retorna HTTP 200 com `SubscriptionResponse`, preservando plano, pagamento, valor e data da contratação. Repetir o status atual, tentar reativar uma contratação encerrada ou ativar uma contratação quando o pet já possui outra ativa retorna HTTP 409. Status ausente, nulo ou inválido retorna 400; contratação inexistente retorna 404. Essa rota, junto com a troca de plano, é restrita a `ADMIN` (ver [Autenticação e Autorização](#autenticação-e-autorização)).
+Repetir o status atual ou tentar reativar uma contratação encerrada retorna `409`. Para um pet cujo contrato foi encerrado, você pode criar outra contratação.
 
-### Troca de plano
+A troca de plano usa `POST /contratacoes/{id}/troca-plano`:
 
-```http
-POST /contratacoes/1/troca-plano
-Authorization: Bearer <token>
-Content-Type: application/json
-
+```json
 {
-    "planId": 2,
-    "paymentMethod": "DEBIT_CARD"
+  "planId": 2,
+  "paymentMethod": "DEBIT_CARD"
 }
 ```
 
-`planId` é obrigatório e positivo. `paymentMethod` é opcional: omitido ou nulo, mantém o pagamento atual. A operação consulta o preço atual do plano, aplica o desconto e retorna HTTP 200 com `SubscriptionResponse`, preservando pet, status e data da contratação. Só é permitida em `ACTIVE` ou `PENDING`; `INACTIVE` retorna 409. Plano ou contratação inexistente retorna 404; dados inválidos retornam 400.
+Se você omitir `paymentMethod` ou enviar `null`, o pagamento atual é mantido. A operação recalcula o preço e preserva pet, status e data de início.
 
-### Filtros úteis em contratações
+O `PUT /contratacoes/{id}` também recalcula o preço, recebe `petId`, `planId` e `paymentMethod`, e preserva o status. Tanto o PUT quanto a troca de plano aceitam somente contratações ativas ou pendentes.
 
+## Endpoints
+
+O contrato completo, com campos e respostas, está no Swagger. Esta tabela reúne os recursos para você localizar as operações:
+
+| Rota base | Recurso | Listagem |
+|---|---|---|
+| `/responsaveis` | Tutores | Paginada |
+| `/pets` | Pets | Paginada |
+| `/contratacoes` | Contratações | Paginada |
+| `/estados` | Estados | Lista |
+| `/cidades` | Cidades | Lista |
+| `/especies` | Espécies | Lista |
+| `/racas` | Raças | Lista |
+| `/planos` | Catálogo de planos | Lista |
+
+Esses recursos têm `POST` e `GET` na rota base, além de `GET`, `PUT` e `DELETE` em `/{id}`, conforme as permissões descritas acima.
+
+As rotas específicas são:
+
+| Método | Rota | Uso |
+|---|---|---|
+| `POST` | `/auth/login` | Obter o token |
+| `GET` | `/auth/me` | Consultar o usuário do token |
+| `GET` | `/contratacoes/minhas` | Listar os planos ativos dos pets do usuário, com paginação |
+| `POST` | `/contratacoes/simulacao` | Simular o valor |
+| `PATCH` | `/contratacoes/{id}/status` | Alterar o status |
+| `POST` | `/contratacoes/{id}/troca-plano` | Trocar o plano |
+| `GET` | `/formas-pagamento` | Consultar os valores de pagamento aceitos |
+| `GET` | `/status-contratacao` | Consultar os status aceitos |
+
+Status e formas de pagamento são enums. Suas rotas retornam listas fixas e não têm cadastro, edição ou exclusão.
+
+### Cadastro de pet
+
+Para cadastrar, informe o ID do tutor e da espécie. A raça é opcional:
+
+```json
+{
+  "name": "Rex",
+  "birthDate": "2020-03-10",
+  "sex": "MALE",
+  "ownerId": 1,
+  "speciesId": 1,
+  "breedId": null
+}
 ```
-GET /contratacoes?status=ACTIVE             # todas ativas
-GET /contratacoes?petId=1                   # histórico de contratações de um pet
-GET /contratacoes?planId=5&status=INACTIVE  # contratações inativas do plano Total
+
+Envie esse corpo para `POST /pets`, com o token. Você obtém seu próprio `ownerId` em `GET /auth/me` e os IDs de espécies e raças em suas respectivas consultas.
+
+A data de nascimento não pode estar no futuro. Sexo aceita `MALE` ou `FEMALE`, e os IDs informados devem ser positivos.
+
+### Filtros e paginação
+
+As páginas começam em zero. Você pode combinar os filtros do recurso com `page`, `size` e `sort`:
+
+```http
+GET /responsaveis?name=ana&page=0&size=10&sort=name,asc
+GET /pets?ownerId=2&speciesId=1&page=0&size=10
+GET /contratacoes?petId=1&status=ACTIVE
+GET /contratacoes/minhas?page=0&size=6&sort=id,desc
 ```
 
-### Lookups (Estados, Cidades, Espécies, etc.)
+| Recurso | Filtros disponíveis |
+|---|---|
+| Responsáveis | `name`, `cpf`, `email` |
+| Pets | `name`, `ownerId`, `speciesId`, `breedId` |
+| Contratações | `petId`, `planId`, `status`, `paymentMethod` |
 
-- `GET /estados`
-- `GET /cidades`
-- `GET /especies`
-- `GET /racas`
-- `GET /planos`
-- `GET /formas-pagamento` — lista fixa dos valores do enum; sem CRUD
-- `GET /status-contratacao` — lista fixa dos valores do enum; sem CRUD
+As respostas paginadas trazem os registros em `content` e informações como `totalElements`, `totalPages` e `last`.
 
-CRUD completo (POST, PUT, DELETE) existe nos lookups persistidos para operações administrativas. Os status e as formas de pagamento são fixos e possuem apenas consulta.
+## Consultando e verificando a API
 
----
+### Swagger, Insomnia ou curl
 
-## Testando a API
+O Swagger permite consultar o contrato e enviar requisições às rotas públicas. A configuração atual não declara o esquema Bearer na documentação, então não há botão **Authorize** para informar o token. Para chamar as rotas protegidas, use Insomnia ou curl.
 
-### Swagger UI
+A coleção [docs/clyvo-care-api.yaml](docs/clyvo-care-api.yaml) tem os ambientes **Base Environment**, para localhost, e **Azure ACI**. Ajuste `base_url` para o endereço da API e execute o login da pasta `00 - Autenticacao`. O script da requisição salva o JWT em `access_token`.
 
-`http://localhost:8080/swagger-ui.html` (ou `http://<fqdn>:8080/swagger-ui.html` no deploy) mostra o contrato completo da API. Ele **não tem um botão "Authorize"** — decisão consciente do time, para seguir o mesmo padrão do exemplo do professor, que também não configura esse recurso. Ou seja, pelo Swagger dá pra ver a documentação, testar `POST /auth/login` e `POST /responsaveis` (as duas rotas públicas), e confirmar que as demais respondem `401` sem token — mas não dá pra passar o `Authorization` numa rota protegida.
+As pastas seguintes agrupam consultas, cadastros, simulação, contratação e mudanças de status. Os cadastros de responsável, pet e contratação guardam os IDs retornados para as próximas requisições. Alguns exemplos de catálogo usam IDs fixos; confira se existem no seu banco antes de executá-los.
 
-### Collection Insomnia
-
-`docs/clyvo-care-api.yaml` é a collection completa, com dois environments:
-
-- **Base Environment** — `base_url = http://localhost:8080`, para testar local
-- **Azure ACI** — troque `base_url` pelo FQDN do deploy (ver [Como executar na nuvem](#como-executar-na-nuvem-azure-acr--aci))
-
-Fluxo de uso:
-
-1. Selecione o environment.
-2. Rode **`00 - Autenticacao > Login`** — ele guarda o JWT em `access_token` automaticamente (script de after-response). Todas as demais requisições já usam `Bearer {{ _.access_token }}`.
-3. Rode as pastas na ordem: **01 (lookups)** → **02 (cadastros ADMIN)** → **03 (responsáveis e pets)** → **04 (Fluxo A — simulação e contratação)** → **05 (Fluxo B — ciclo de vida)**.
-
-As requests de cadastro (Responsável, Pet, Contratação) encadeiam os IDs automaticamente (`owner_id`, `pet_id`, `subscription_id`), então o Fluxo A e o Fluxo B rodam em sequência sem edição manual.
-
-### Sem Insomnia — fallback com `curl`
+Se preferir curl, faça o login:
 
 ```bash
-TOKEN=$(curl -s -X POST http://localhost:8080/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"ana@email.com","password":"senha123"}' | grep -o '"token":"[^"]*' | cut -d'"' -f4)
-
-curl -s http://localhost:8080/planos -H "Authorization: Bearer $TOKEN"
+curl -i -X POST http://localhost:8080/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"carlos@email.com","password":"senha123"}'
 ```
 
----
+Copie o token da resposta e use-o na consulta:
 
-## Estrutura de pastas
-
-```
-Java-Sprint-1/
-├── Dockerfile                          ← build multi-stage da API
-├── azure-acr-aci-setup.sh              ← provisiona ACR + ACI (Sprint 3)
-├── azure-acr-aci-test.sh               ← smoke test contra o deploy
-├── azure-cleanup.sh                    ← apaga o resource group
-├── azure-setup.sh                      ← script legado (VM da Sprint 1)
-├── script_bd.sql                       ← DDL + seeds + PL/SQL (disciplina de Database)
-├── .gitignore                          ← docker-compose.yml e o manifesto ACI gerado ficam fora do git
-├── pom.xml
-├── mvnw / mvnw.cmd
-├── docs/
-│   ├── clyvo-care-api.yaml             ← collection Insomnia
-│   ├── script.sql                      ← mesmo conteúdo de script_bd.sql
-│   └── MER.png                         ← diagrama entidade-relacionamento
-└── src/main/
-    ├── java/br/com/fiap/ClyvoCareAPI/
-    │   ├── ClyvoCareApiApplication.java
-    │   ├── auth/
-    │   │   ├── SecurityConfig.java
-    │   │   ├── AuthService.java
-    │   │   ├── TokenService.java
-    │   │   └── AuthController.java
-    │   ├── config/
-    │   │   ├── OpenApiConfig.java
-    │   │   ├── CorsConfig.java
-    │   │   └── DataInitializer.java
-    │   ├── controller/
-    │   │   └── (um por entidade)
-    │   ├── service/
-    │   │   └── (um por entidade)
-    │   ├── repository/
-    │   │   └── (um por entidade)
-    │   ├── entity/
-    │   │   └── (entidades JPA)
-    │   ├── dto/
-    │   │   └── (XxxRequest + XxxResponse records)
-    │   └── validation/
-    │       └── ValidationHandler.java
-    └── resources/
-        ├── application.properties
-        ├── db/migration/
-        │   ├── V1__create_baseline_schema.sql
-        │   └── V2__subscription_enums.sql
-        └── keys/
-            └── (private_key.pem / public_key.pem — par de demonstração que assina o JWT)
+```bash
+curl -i http://localhost:8080/contratacoes/minhas \
+  -H 'Authorization: Bearer COLE_O_TOKEN_AQUI'
 ```
 
----
+Esses exemplos usam Bash. No PowerShell, use `curl.exe` e escreva cada comando em uma linha.
 
-## Banco de dados
+### Testes disponíveis
 
-O schema é versionado por **Flyway**. A V1 histórica cria 15 tabelas e permanece inalterada para preservar os checksums já registrados. A `V2__subscription_enums.sql` converte `STATUS_ID` e `PAYMENT_METHOD_ID` em textos e remove as duas tabelas auxiliares, deixando **13 tabelas de aplicação**. O Hibernate usa `ddl-auto=validate`.
+O teste Java existente, `ClyvoCareApiApplicationTests`, verifica a inicialização do contexto Spring. Ele usa a configuração de banco da aplicação, portanto depende de um Oracle acessível e pode aplicar migrations durante a inicialização. Ainda não há uma suíte de testes unitários das regras de contratação.
 
-> O versionamento por Flyway é exercido contra o Oracle da FIAP (o esquema já existe: baseline 1, V2 aplicada). O deploy ACI sobe um Oracle XE efêmero acessado como `system` — cenário em que o baseline do Flyway não roda o V1. Por isso o container sobrescreve, apenas nesse ambiente, `SPRING_FLYWAY_ENABLED=false` e `SPRING_JPA_HIBERNATE_DDL_AUTO=update`, deixando o Hibernate criar o schema. O `application.properties` versionado permanece com Flyway ligado e `validate`.
+Para executá-lo, use `./mvnw test` ou `.\mvnw.cmd test`.
 
-### Dados de demonstração
+O script `azure-acr-aci-test.sh` faz verificações HTTP de documentação, login, consultas e cadastro de tutor e pet. Ele cria dados no ambiente informado. Você pode passar a URL explicitamente:
 
-As migrations Flyway só criam o schema — não inserem dados. A carga de exemplo tem uma única fonte: a classe `config/DataInitializer`, que roda no boot e, se as tabelas estiverem vazias, insere estados, cidades, espécies, raças, planos e os dois usuários de teste (ver [Autenticação e Autorização](#autenticação-e-autorização)). É controlada por `app.seed.enabled` (default `true`); definir `false` desliga a carga. Contra o Oracle da FIAP, que já tem dados, ela não faz nada.
+```bash
+bash azure-acr-aci-test.sh http://SEU_FQDN:8080
+```
 
-`docs/script.sql` (idêntico a `script_bd.sql`, na raiz) é um artefato separado, da disciplina de Database: recriação manual completa (DDL + seeds + PL/SQL), com `DROP TABLE`. Não é executado pela aplicação.
+## Deploy no Azure ACR + ACI
 
-### Migração V1 → V2
+Este é o fluxo usado para a entrega de **DevOps Tools & Cloud Computing da Sprint 3**, na opção **ACR + ACI**: a aplicação e o banco rodam em containers na nuvem. O script [azure-acr-aci-setup.sh](azure-acr-aci-setup.sh) cria os recursos via Azure CLI, publica a imagem da API no Azure Container Registry e sobe um grupo no Azure Container Instances com dois containers: a API e um Oracle XE 21.
 
-- **Banco existente no modelo antigo:** a V2 preserva IDs, datas e valores das contratações. A conversão usa nomes dos cadastros antigos, sem fixar seus IDs.
-- **Banco vazio:** o Flyway aplica V1 e V2.
-- **Schema criado pelo `docs/script.sql` atual:** o Flyway registra baseline 1; a V2 reconhece as colunas textuais existentes e atualiza o PL/SQL.
-- **Schema legado anterior à V1:** a V2 também adiciona `ROLE_NAME`/`ENABLED` em tutores e a tabela de auditoria, se ausentes. Isso não substitui a conferência das demais tabelas antes de registrar o baseline.
-- Funções, relatórios e trigger são recompilados e verificados em `USER_ERRORS`. Se existir `SP_INSERT_SUBSCRIPTION`, seus parâmetros de status e pagamento passam a texto.
+Para executar esse fluxo, você precisa de:
 
-| Dado antigo | Valor após a V2 |
+- **Azure CLI** instalada e uma **assinatura Azure ativa**.
+- **Docker Desktop aberto e usando containers Linux**, no Windows, ou Docker Engine em execução no Linux.
+- **Bash ou Git Bash**, com os comandos `az`, `docker` e `curl` disponíveis.
+- O repositório clonado na sua máquina, conforme [Configurando a conexão](#configurando-a-conexão).
+
+Abra o terminal na raiz do repositório, onde ficam o `Dockerfile` e o script. Confira se o Docker está respondendo e selecione a assinatura que vai receber os recursos:
+
+```bash
+docker info
+az login
+az account set --subscription "NOME_OU_ID_DA_ASSINATURA"
+az account show --query "{assinatura:name, id:id}" -o table
+```
+
+Se `docker info` falhar, aguarde o Docker Desktop terminar de iniciar antes de continuar. O build usa as imagens de Maven e Java definidas no Dockerfile; você não precisa gerar o JAR manualmente para esse deploy.
+
+Depois, execute:
+
+```bash
+bash azure-acr-aci-setup.sh
+```
+
+O script faz o seguinte:
+
+1. Confere o login no Azure e registra os provedores `Microsoft.ContainerRegistry` e `Microsoft.ContainerInstance`, quando necessário.
+2. Cria o **Resource Group** e um **ACR** na assinatura selecionada.
+3. Autentica o Docker no ACR, faz o **build da API na sua máquina** e envia a imagem com `docker push`.
+4. Gera o arquivo `aci-deployment.generated.yaml`, com as imagens, portas e variáveis de conexão.
+5. Cria o **grupo ACI**. A Azure baixa a imagem da API do ACR e a imagem `gvenzl/oracle-xe:21-slim` para iniciar o banco.
+6. Consulta o IP e o endereço público e aguarda a API responder em `/v3/api-docs`, com até 60 tentativas e intervalo de 10 segundos.
+
+O Docker Desktop participa do build e do envio da imagem. Depois do provisionamento, os containers da aplicação e do banco executam na Azure.
+
+### Nomes e configurações do ambiente
+
+O script usa estes valores por padrão:
+
+| Variável | Valor padrão | Uso |
+|---|---|---|
+| `RESOURCE_GROUP` | `rg-clyvocare-sprint3` | Grupo que reúne os recursos |
+| `LOCATION` | `mexicocentral` | Região de criação |
+| `CONTAINER_GROUP_NAME` | `aci-clyvocare-group` | Grupo com a API e o Oracle |
+| `ACR_NAME` | `acrclyvo` seguido de um sufixo aleatório | Nome do registro de imagens |
+| `DNS_LABEL` | `clyvocare-api-` seguido de um sufixo aleatório | Parte inicial do endereço público |
+
+Para personalizar os nomes, exporte as variáveis no mesmo terminal antes de executar o script. Use uma região disponível para sua assinatura. Você também pode definir `ORACLE_PWD`, `APP_DB_USER` e `APP_DB_PWD` para configurar as credenciais do Oracle desse ambiente.
+
+Esse processo inclui a inicialização de um Oracle próprio no ACI. As variáveis `SPRING_DATASOURCE_*` usadas na execução local com o banco da FIAP não são reaproveitadas pelo script: ele define a conexão do container com o Oracle do grupo. Para desenvolver, você pode continuar rodando a API localmente com o banco da FIAP, sem repetir todo o provisionamento a cada alteração.
+
+### Como o ambiente é organizado
+
+```mermaid
+flowchart LR
+    build["Build Docker local"] --> acr["ACR: imagem da API"]
+    acr --> api
+    client["Frontend / cliente HTTP"] -->|HTTP 8080| api
+    subgraph aci["Grupo ACI"]
+        api["Container Spring Boot"] -->|JDBC| oracle["Container Oracle XE 21"]
+    end
+```
+
+O grupo expõe as portas **8080** e **1521**. A API acessa o Oracle por `127.0.0.1:1521/XEPDB1`, dentro do mesmo grupo.
+
+O [Dockerfile](Dockerfile) usa duas etapas: Maven com JDK 23 para gerar o JAR e JRE 23 para executá-lo. O projeto compila para Java 17. O container da API roda como `appuser`, UID `10001`, e o build da imagem usa `-DskipTests`.
+
+### Diferenças em relação à execução local
+
+**O script ACI atual desabilita o Flyway.** Ele injeta estas variáveis no container da API:
+
+```yaml
+SPRING_FLYWAY_ENABLED: "false"
+SPRING_JPA_HIBERNATE_DDL_AUTO: "update"
+```
+
+Com isso, o Hibernate cria ou altera as tabelas, e o `DataInitializer` tenta carregar os dados de demonstração. As migrations V1, V2 e V3, incluindo os objetos PL/SQL, não são executadas nesse deploy.
+
+O script também cria o usuário `clyvocare`, mas conecta a API como `system`, usando `ORACLE_PWD`. Ao consultar as tabelas para conferir dados criados pela API, considere esse schema; o usuário anunciado no resumo do script é `APP_DB_USER`.
+
+O banco não tem volume persistente configurado nesse manifesto. Trate os dados desse ambiente como temporários. A execução local com Flyway e a inicialização pelo script ACI seguem configurações diferentes; o deploy ainda precisa ser alinhado às migrations.
+
+### Endereço e logs
+
+Com os nomes padrão do script, você pode recuperar o endereço a qualquer momento:
+
+```bash
+az container show --resource-group rg-clyvocare-sprint3 --name aci-clyvocare-group --query ipAddress.fqdn -o tsv
+```
+
+Use `http://FQDN_RETORNADO:8080` como base da API. O Swagger fica em `/swagger-ui.html`. Se você alterar `RESOURCE_GROUP` ou `CONTAINER_GROUP_NAME`, use esses mesmos nomes nos comandos de consulta.
+
+Para acompanhar os logs da API:
+
+```bash
+az container logs --resource-group rg-clyvocare-sprint3 --name aci-clyvocare-group --container-name clyvocare-api --follow
+```
+
+Para os logs do banco, troque o nome do container por `oracle-db`. A resposta de `/v3/api-docs` confirma acesso à documentação, mas não substitui a verificação do login e dos fluxos com gravação no banco.
+
+### Conferindo a entrega de DevOps
+
+Com a API respondendo no endereço público, execute as verificações HTTP:
+
+```bash
+bash azure-acr-aci-test.sh http://SEU_FQDN:8080
+```
+
+Esse script verifica documentação, login, consultas e cadastro de tutor e pet. Para demonstrar o CRUD completo exigido na Sprint 3, use também a coleção do Insomnia ou os endpoints descritos neste README para criar, consultar, editar e excluir **pets e contratações**. Essas duas tabelas fazem parte do negócio e estão relacionadas pelo pet da contratação. Prepare pelo menos dois registros significativos em cada uma e exclua as contratações antes dos pets usados no teste.
+
+Para conferir os dados diretamente no Oracle do ACI, abra uma conexão no SQL Developer ou em outro cliente Oracle:
+
+| Campo | Valor |
 |---|---|
-| `ACTIVE`, `TRIAL` | `ACTIVE` |
-| `CANCELED`, `SUSPENDED`, `INACTIVE` | `INACTIVE` |
-| `OVERDUE`, `PENDING` | `PENDING` |
-| `Card`, `CREDIT CARD`, `CREDIT_CARD` | `CREDIT_CARD` |
-| `Auto Debit`, `DEBIT CARD`, `DEBIT_CARD` | `DEBIT_CARD` |
-| `Boleto`, `Pix` | `BOLETO`, `PIX` |
+| Host | IP público ou FQDN retornado pelo script |
+| Porta | `1521` |
+| Tipo de conexão | Service name |
+| Serviço | `XEPDB1` |
+| Usuário | `system`, usado pela API no manifesto atual |
+| Senha | Valor de `ORACLE_PWD` usado no provisionamento |
 
-Valores já normalizados são mantidos. Contratações que usem outros nomes interrompem a V2 antes da conversão; cadastros antigos sem uso desaparecem com as tabelas auxiliares.
+Consulte as tabelas após cada operação da API:
 
 ```sql
-SELECT FN_CALCULATE_CONTRACT_VALUE(1, 'DEBIT_CARD') FROM DUAL;
-
-BEGIN
-    SP_REPORT_SUBSCRIPTIONS_JSON('ACTIVE');
-    SP_REPORT_REVENUE_FACT;
-END;
-/
+SELECT * FROM TB_CAD_PET;
+SELECT * FROM TB_CAD_SUBSCRIPTION;
 ```
 
----
+O DDL comentado está em [script_bd.sql](script_bd.sql). Como explicado na seção de banco, esse arquivo também contém comandos de exclusão de tabelas; as consultas acima bastam para conferir a persistência durante a demonstração.
 
-## Requisitos da disciplina cobertos
+No vídeo de DevOps, comece pelo clone do repositório, mostre a criação dos recursos pelo script e execute o CRUD usando a API publicada. Mostre os `SELECT` no banco sem cortes durante a comprovação das operações, com resolução mínima de 720p e explicação por voz. O PDF da entrega deve conter somente os nomes e RMs dos integrantes e os links do GitHub e do vídeo no YouTube.
 
-### Java Advanced (Sprint 1)
-- CRUD completo das 8 entidades com retornos HTTP corretos (200, 201, 204, 400, 404, 409)
-- Bean Validation com extensões brasileiras (`@CPF`, `@Email`, `@Size`, `@Positive`, `@PastOrPresent`)
-- Paginação e ordenação via `Pageable` em Owner, Pet e Subscription
-- Busca por parâmetros opcionais combinados
-- Consultas JPQL personalizadas nos repositórios
-- Cache configurado em listagens estáveis
-- Tratamento global de exceções com formato JSON consistente
-- Documentação Swagger/OpenAPI completa
+### Removendo os recursos
 
-### Java Advanced (Sprint 3)
-- **Flyway:** V1 histórica + V2 dos enums de status e pagamento; schema atual com 13 tabelas, conversão dos dados existentes e `ddl-auto=validate`
-- **Spring Security:** autenticação JWT stateless (RSA/RS256), 2 perfis (`ADMIN`/`OWNER`) via `TB_CAD_OWNER.ROLE_NAME`, rotas protegidas por perfil com `@PreAuthorize`
-- **Fluxo de simulação e contratação:** desconto por forma de pagamento, status inicial definido pelo backend, validação de duplicidade e recálculo no PUT
-- **Ciclo de vida da assinatura:** transições entre `ACTIVE`/`PENDING`/`INACTIVE` e troca de plano, com bloqueio de encerradas e validação de contratação ativa duplicada na ativação
-- **Proteção por perfil dos endpoints de fluxo:** `POST /contratacoes/simulacao` liberado para `ADMIN` e `OWNER`; `PATCH /contratacoes/{id}/status` e `POST /contratacoes/{id}/troca-plano` restritos a `ADMIN`
+Quando terminar de usar o ambiente, você pode solicitar sua exclusão:
 
-### DevOps Tools & Cloud Computing
-- Solução 100% containerizada: API e banco de dados em containers separados, no mesmo Container Group ACI
-- Todos os recursos provisionados via Azure CLI (`azure-acr-aci-setup.sh`), sem passos manuais no portal
-- Imagem Docker multi-stage, publicada em um Azure Container Registry próprio
-- Container da aplicação rodando como usuário non-root (`UID 10001`)
-- Região `mexicocentral`, compatível com assinaturas Azure for Students
-- DDL com estrutura e comentários entregue em `script_bd.sql`
+```bash
+bash azure-cleanup.sh
+```
+
+Esse script **apaga o grupo de recursos inteiro**, incluindo o ACR e os containers. Ele usa o grupo `rg-clyvocare-sprint3` por padrão ou o valor de `RESOURCE_GROUP`. A exclusão é iniciada em segundo plano, sem confirmação interativa.
+
+## Tecnologias utilizadas
+
+| Ferramenta | Papel |
+|---|---|
+| Java 17 e Spring Boot 4.0.6 | Linguagem e estrutura da aplicação |
+| Spring Web MVC | Rotas HTTP |
+| Spring Data JPA e Hibernate | Persistência no Oracle |
+| Flyway e módulo Oracle | Versionamento do banco |
+| Spring Security e OAuth2 Resource Server | Login e validação de JWT |
+| BCrypt | Hash das senhas |
+| Bean Validation | Validação dos campos de entrada |
+| Spring Cache | Cache de consultas de estados e cidades |
+| SpringDoc OpenAPI 3.0.2 | Documentação Swagger |
+| Lombok | Geração de construtores, acessores e builders |
+| Maven | Dependências e compilação |
+| Docker, ACR e ACI | Empacotamento e deploy |
+
+As versões e dependências estão em [pom.xml](pom.xml). Embora existam dependências de H2 no arquivo, a configuração de execução usa Oracle.
+
+## Estrutura e decisões de implementação
+
+O código está organizado por camada. Para acompanhar uma requisição, comece no controller, siga para o service e depois para o repository:
+
+```text
+src/main/
+├── java/br/com/fiap/ClyvoCareAPI/
+│   ├── auth/          login, emissão de JWT e regras de segurança
+│   ├── config/        CORS, OpenAPI e carga alternativa sem Flyway
+│   ├── controller/    endpoints e respostas HTTP
+│   ├── service/       regras de negócio e transações
+│   ├── repository/    consultas e persistência com JPA
+│   ├── entity/        mapeamento das tabelas e enums
+│   ├── dto/           contratos de entrada e saída
+│   └── validation/    tratamento dos erros de validação
+└── resources/
+    ├── application.properties
+    ├── db/migration/  V1, V2 e V3
+    └── keys/          chaves RSA de demonstração
+```
+
+Os DTOs são records que separam o JSON das entidades. Os controllers recebem os DTOs de entrada, chamam os serviços e convertem os resultados em DTOs de resposta. Os serviços recebem as requisições tipadas e trabalham com entidades para aplicar as regras e persistir os dados.
+
+A lógica de preço fica em `ContractPricingService`, compartilhada pela simulação, criação, edição e troca de plano. As transições de status ficam em `SubscriptionLifecycleService`. Isso mantém o cálculo e as transições no mesmo lugar para todas essas operações.
+
+As alterações de contratação usam transações e bloqueios dos registros envolvidos. A verificação de outra contratação ativa é feita com o pet bloqueado, evitando que duas operações concorrentes criem ou ativem contratos para ele ao mesmo tempo.
+
+Estados e cidades têm cache nas consultas, invalidado nas alterações. As chaves estrangeiras continuam protegidas pelo Oracle, e os serviços também consultam os registros relacionados para devolver `404` quando uma referência não existe.
+
+O `ValidationHandler` devolve erros de campos como uma lista de objetos `{field, message}`. Para `ResponseStatusException`, retorna `{status, message}`. Por isso, ao tratar erros no frontend, você precisa considerar os dois formatos.
+
+O modelo Oracle compartilhado mantém a referência entre as clínicas da API .NET e as cidades cadastradas pela API Java. O Oracle do ACI é uma instância própria, separada do banco da FIAP; as APIs só consultam os mesmos registros quando suas conexões apontam para o mesmo schema no mesmo banco.
+
+Outros arquivos úteis:
+
+| Arquivo | Conteúdo |
+|---|---|
+| [docs/clyvo-care-api.yaml](docs/clyvo-care-api.yaml) | Coleção Insomnia |
+| [docs/MER.png](docs/MER.png) | Diagrama do banco |
+| [script_bd.sql](script_bd.sql) | Script completo da entrega de Database |
+| [azure-acr-aci-setup.sh](azure-acr-aci-setup.sh) | Provisionamento ACR + ACI |
+| [azure-acr-aci-test.sh](azure-acr-aci-test.sh) | Verificações HTTP no ambiente informado |
+| [azure-cleanup.sh](azure-cleanup.sh) | Exclusão dos recursos Azure |
+| [azure-setup.sh](azure-setup.sh) | Script da Sprint 1, baseado em VM |
+
+## Relação com a Sprint 3
+
+| Disciplina | Onde encontrar a implementação |
+|---|---|
+| Java Advanced — frontend | Camada de visualização [ClyvoCare Web](https://github.com/ClyvoPet-Challenge-2026/Java-Sprint-1-Web), em React/Vite: login, pets, contratação, meus planos e gestão de status |
+| Java Advanced — Flyway | Migrations V1, V2 e V3 na execução normal |
+| Java Advanced — Spring Security | Perfis `ADMIN` e `OWNER`, JWT e permissões nos endpoints |
+| Java Advanced — fluxos de negócio | Simulação e contratação; mudança de status e troca de plano |
+| DevOps | Dockerfile e scripts de build, publicação, provisionamento e verificação no ACR + ACI |
+| Database | Modelagem, scripts SQL, funções, procedimentos e trigger |
+| .NET | [API complementar](https://github.com/ClyvoPet-Challenge-2026/.Net-Sprint-1), com clínicas, consultas de localização, observabilidade e projetos de testes |
+| Mobile Application Development | Versão mobile das entregas no repositório [Clyvo-Care](https://github.com/ClyvoPet-Challenge-2026/Clyvo-Care) |
+
+Para demonstrar o versionamento do banco, use a execução com Flyway habilitado. Para demonstrar o deploy ACI, considere as diferenças documentadas na seção de Azure. A verificação completa da entrega também depende de executar os fluxos e apresentar as evidências exigidas pela disciplina.

@@ -15,6 +15,13 @@ import java.util.Optional;
 
 public interface SubscriptionRepository extends JpaRepository<Subscription, Long> {
 
+    @Query("SELECT s FROM Subscription s WHERE s.pet.owner.email = :email AND s.status = :status")
+    Page<Subscription> findByOwnerEmailAndStatus(
+            @Param("email") String email,
+            @Param("status") SubscriptionStatus status,
+            Pageable pageable
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM Subscription s WHERE s.id = :id")
     Optional<Subscription> findByIdForUpdate(@Param("id") Long id);
