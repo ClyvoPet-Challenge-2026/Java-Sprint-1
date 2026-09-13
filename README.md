@@ -9,6 +9,7 @@ O projeto tem uma irmã em C# (.NET Advanced) que cuida da operação clínica e
 ## Índice
 
 - [Sobre a divisão por domínio](#sobre-a-divisão-por-domínio)
+- [Frontend web (camada de visualização)](#frontend-web-camada-de-visualização)
 - [Stack técnica](#stack-técnica)
 - [Benefícios para o Negócio](#benefícios-para-o-negócio)
 - [Arquitetura macro na nuvem](#arquitetura-macro-na-nuvem)
@@ -42,6 +43,30 @@ Esta API (Java) é dona de escrita das seguintes tabelas:
 Status e forma de pagamento são enums armazenados nas colunas `STATUS` e `PAYMENT_METHOD` de `TB_CAD_SUBSCRIPTION`, sem tabelas auxiliares.
 
 A API C# escreve em `TB_CAD_CLINIC`, `TB_HEA_CLINICAL_EVENT` e `TB_HEA_REMINDER`, e lê algumas das tabelas acima quando precisa.
+
+---
+
+## Frontend web (camada de visualização)
+
+Este repositório é 100% backend — API REST pura, sem nenhuma tela. A camada de visualização exigida pela disciplina (Java Advanced, Sprint 3) vive em um repositório próprio, dedicado só ao frontend:
+
+🔗 **[ClyvoCare Web](https://github.com/ClyvoPet-Challenge-2026/Java-Sprint-1-Web)**
+
+É uma SPA em **React + Vite** que consome esta API via HTTP e cobre, na prática, o que o backend já modela:
+
+- **Login com JWT** (`POST /auth/login`) e sessão persistida no navegador, sem repetir autenticação a cada acesso
+- **Dois perfis de usuário com telas diferentes** (`ADMIN` e `OWNER`), refletindo no frontend a mesma proteção de rotas por perfil que já existe aqui no backend (ver [Autenticação e Autorização](#autenticação-e-autorização))
+- **CRUD completo de Pets**, com formulário de cadastro, edição e remoção
+- **Fluxo de contratação de plano** (simula o preço com desconto antes de confirmar) e **fluxo de gestão de contratações** (troca de status), os dois fluxos de negócio não-CRUD descritos em [Status e forma de pagamento](#status-e-forma-de-pagamento)
+
+### Rodando os dois juntos
+
+1. Suba esta API — local (`./mvnw spring-boot:run`) ou aponte para o FQDN do deploy em nuvem (ver [Como executar na nuvem](#como-executar-na-nuvem-azure-acr--aci))
+2. Clone o [repositório do frontend](https://github.com/ClyvoPet-Challenge-2026/Java-Sprint-1-Web)
+3. Configure `VITE_API_BASE_URL` no `.env` (aponte para `http://localhost:8080` ou para o FQDN do ACI)
+4. Rode `npm install && npm run dev` e acesse `http://localhost:5173`
+
+O CORS desta API já libera `http://localhost:5173` por padrão (ver [CORS](#cors)), então nenhum ajuste adicional é necessário para o desenvolvimento local do front.
 
 ---
 
@@ -338,7 +363,7 @@ Rotas de fluxo de `/contratacoes`:
 
 ### CORS
 
-O frontend (React + Vite) roda em outra origem. `CorsConfig` libera `GET/POST/PUT/PATCH/DELETE/OPTIONS` e os headers `Authorization`/`Content-Type` para as origens em `cors.allowed-origins` (default: `http://localhost:5173` e `http://localhost:3000`). Em produção, definir `CORS_ALLOWED_ORIGINS` com a URL do front.
+O [frontend](https://github.com/ClyvoPet-Challenge-2026/Java-Sprint-1-Web) (React + Vite, ver [Frontend web](#frontend-web-camada-de-visualização)) roda em outra origem. `CorsConfig` libera `GET/POST/PUT/PATCH/DELETE/OPTIONS` e os headers `Authorization`/`Content-Type` para as origens em `cors.allowed-origins` (default: `http://localhost:5173` e `http://localhost:3000`). Em produção, definir `CORS_ALLOWED_ORIGINS` com a URL do front.
 
 ---
 
@@ -664,6 +689,7 @@ END;
 - Documentação Swagger/OpenAPI completa
 
 ### Java Advanced (Sprint 3)
+- **Frontend:** camada de visualização entregue em repositório próprio ([ClyvoCare Web](https://github.com/ClyvoPet-Challenge-2026/Java-Sprint-1-Web)), com login JWT, dois perfis de usuário com telas e rotas protegidas, e dois fluxos completos não-CRUD (contratação de plano e gestão de status) — ver [Frontend web](#frontend-web-camada-de-visualização)
 - **Flyway:** V1 histórica + V2 dos enums de status e pagamento; schema atual com 13 tabelas, conversão dos dados existentes e `ddl-auto=validate`
 - **Spring Security:** autenticação JWT stateless (RSA/RS256), 2 perfis (`ADMIN`/`OWNER`) via `TB_CAD_OWNER.ROLE_NAME`, rotas protegidas por perfil com `@PreAuthorize`
 - **Fluxo de simulação e contratação:** desconto por forma de pagamento, status inicial definido pelo backend, validação de duplicidade e recálculo no PUT
