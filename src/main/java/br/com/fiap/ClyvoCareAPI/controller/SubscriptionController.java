@@ -20,6 +20,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -28,6 +30,17 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "Contratações", description = "Gestão de contratações e simulação de preços com desconto")
 public class SubscriptionController {
     private final SubscriptionService subscriptionService;
+
+    @GetMapping("/minhas")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @Operation(summary = "Lista os planos ativos dos pets do usuário autenticado")
+    public Page<SubscriptionResponse> findMyActiveSubscriptions(
+            @AuthenticationPrincipal Jwt jwt,
+            Pageable pageable
+    ) {
+        return subscriptionService.findActiveSubscriptionsByOwnerEmail(jwt.getSubject(), pageable)
+                .map(SubscriptionResponse::fromEntity);
+    }
 
     @GetMapping
     @Operation(summary = "Lista contratações com paginação e filtros opcionais")

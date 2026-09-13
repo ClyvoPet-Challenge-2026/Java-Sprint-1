@@ -142,7 +142,7 @@ Pré-requisitos no ambiente:
 
 - Java 17+ instalado e disponível no `PATH`
 - Acesso à VPN da FIAP (para conectar no `oracle.fiap.com.br`) ou um Oracle próprio via `SPRING_DATASOURCE_URL`
-- Contra a FIAP o Flyway registra o baseline sobre o schema existente; contra um banco vazio o Flyway aplica V1 + V2 e o `DataInitializer` carrega os dados de exemplo (ver [Banco de dados](#banco-de-dados))
+- Contra a FIAP o Flyway registra o baseline sobre o schema existente quando ainda não há histórico e aplica as migrations posteriores; contra um banco vazio aplica V1 + V2 + V3. A V3 carrega os dados de exemplo e corrige os placeholders de senha dos dois usuários de demonstração (ver [Banco de dados](#banco-de-dados)).
 
 O par de chaves RSA que assina o JWT já está versionado em `src/main/resources/keys/` (chaves de demonstração). Para um deploy real, gere um par novo (precisa de OpenSSL):
 
@@ -530,6 +530,7 @@ Content-Type: application/json
 
 ```
 GET /contratacoes?status=ACTIVE             # todas ativas
+GET /contratacoes/minhas?page=0&size=6       # planos ativos dos pets do usuário do JWT
 GET /contratacoes?petId=1                   # histórico de contratações de um pet
 GET /contratacoes?planId=5&status=INACTIVE  # contratações inativas do plano Total
 ```
@@ -626,7 +627,8 @@ Java-Sprint-1/
         ├── application.properties
         ├── db/migration/
         │   ├── V1__create_baseline_schema.sql
-        │   └── V2__subscription_enums.sql
+        │   ├── V2__subscription_enums.sql
+        │   └── V3__seed_demo_data.sql
         └── keys/
             └── (private_key.pem / public_key.pem — par de demonstração que assina o JWT)
 ```
@@ -641,14 +643,20 @@ O schema é versionado por **Flyway**. A V1 histórica cria 15 tabelas e permane
 
 ### Dados de demonstração
 
-As migrations Flyway só criam o schema — não inserem dados. A carga de exemplo tem uma única fonte: a classe `config/DataInitializer`, que roda no boot e, se as tabelas estiverem vazias, insere estados, cidades, espécies, raças, planos e os dois usuários de teste (ver [Autenticação e Autorização](#autenticação-e-autorização)). É controlada por `app.seed.enabled` (default `true`); definir `false` desliga a carga. Contra o Oracle da FIAP, que já tem dados, ela não faz nada.
+A execução normal usa a migration `V3__seed_demo_data.sql` para inserir estados, cidades, espécies, raças, planos e os dois usuários de demonstração. A carga usa `MERGE` por chaves de negócio, sem IDs fixos: inclui os registros ausentes mesmo em tabelas parcialmente preenchidas e preserva os cadastros e preços existentes.
+
+Para `ana@email.com` e `carlos@email.com`, a V3 substitui somente os placeholders legados `hash1` e `hash2`, respectivamente, por BCrypt da senha `senha123`. Senhas diferentes desses placeholders são preservadas. Os perfis dessas duas contas de demonstração são ajustados para `ADMIN` e `OWNER`; contas novas são habilitadas, e a situação de habilitação das contas existentes é preservada.
+
+O Flyway registra a V3 no histórico e não a repete a cada inicialização. Para um banco já atualizado até V2, basta iniciar a aplicação normalmente com Flyway habilitado para aplicar a carga. V1 e V2 permanecem inalteradas. A V3 não apaga tabelas nem recria registros existentes.
+
+Enquanto o deploy ACI mantiver `SPRING_FLYWAY_ENABLED=false`, a classe `config/DataInitializer` continua como alternativa para esse ambiente, controlada por `app.seed.enabled` (default `true`). Ela só é ativada com Flyway explicitamente desabilitado. `app.seed.enabled=false` desativa essa alternativa Java, mas não impede a execução da migration V3. O ajuste do Azure ACI para executar Flyway está pendente; seus scripts não foram alterados nesta mudança.
 
 `docs/script.sql` (idêntico a `script_bd.sql`, na raiz) é um artefato separado, da disciplina de Database: recriação manual completa (DDL + seeds + PL/SQL), com `DROP TABLE`. Não é executado pela aplicação.
 
 ### Migração V1 → V2
 
 - **Banco existente no modelo antigo:** a V2 preserva IDs, datas e valores das contratações. A conversão usa nomes dos cadastros antigos, sem fixar seus IDs.
-- **Banco vazio:** o Flyway aplica V1 e V2.
+- **Banco vazio:** o Flyway aplica V1 e V2 para a estrutura, seguidas de V3 para os dados de demonstração.
 - **Schema criado pelo `docs/script.sql` atual:** o Flyway registra baseline 1; a V2 reconhece as colunas textuais existentes e atualiza o PL/SQL.
 - **Schema legado anterior à V1:** a V2 também adiciona `ROLE_NAME`/`ENABLED` em tutores e a tabela de auditoria, se ausentes. Isso não substitui a conferência das demais tabelas antes de registrar o baseline.
 - Funções, relatórios e trigger são recompilados e verificados em `USER_ERRORS`. Se existir `SP_INSERT_SUBSCRIPTION`, seus parâmetros de status e pagamento passam a texto.
@@ -690,7 +698,7 @@ END;
 
 ### Java Advanced (Sprint 3)
 - **Frontend:** camada de visualização entregue em repositório próprio ([ClyvoCare Web](https://github.com/ClyvoPet-Challenge-2026/Java-Sprint-1-Web)), com login JWT, dois perfis de usuário com telas e rotas protegidas, e dois fluxos completos não-CRUD (contratação de plano e gestão de status) — ver [Frontend web](#frontend-web-camada-de-visualização)
-- **Flyway:** V1 histórica + V2 dos enums de status e pagamento; schema atual com 13 tabelas, conversão dos dados existentes e `ddl-auto=validate`
+- **Flyway:** V1 histórica + V2 dos enums de status e pagamento + V3 da carga de demonstração; schema atual com 13 tabelas, conversão dos dados existentes e `ddl-auto=validate`
 - **Spring Security:** autenticação JWT stateless (RSA/RS256), 2 perfis (`ADMIN`/`OWNER`) via `TB_CAD_OWNER.ROLE_NAME`, rotas protegidas por perfil com `@PreAuthorize`
 - **Fluxo de simulação e contratação:** desconto por forma de pagamento, status inicial definido pelo backend, validação de duplicidade e recálculo no PUT
 - **Ciclo de vida da assinatura:** transições entre `ACTIVE`/`PENDING`/`INACTIVE` e troca de plano, com bloqueio de encerradas e validação de contratação ativa duplicada na ativação

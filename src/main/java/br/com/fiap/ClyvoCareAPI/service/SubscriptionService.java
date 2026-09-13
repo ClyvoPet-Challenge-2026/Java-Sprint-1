@@ -27,6 +27,11 @@ public class SubscriptionService {
     private final ContractPricingService contractPricingService;
     private final SubscriptionLifecycleService subscriptionLifecycleService;
 
+    @Transactional(readOnly = true)
+    public Page<Subscription> findActiveSubscriptionsByOwnerEmail(String email, Pageable pageable) {
+        return subscriptionRepository.findByOwnerEmailAndStatus(email, SubscriptionStatus.ACTIVE, pageable);
+    }
+
     public Page<Subscription> searchSubscriptions(
             Long petId,
             Long planId,
