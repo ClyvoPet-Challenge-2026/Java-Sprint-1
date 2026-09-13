@@ -187,5 +187,6 @@ echo -e "  ${YELLOW}az container logs --resource-group $RESOURCE_GROUP --name $C
 echo -e "
 Para visualizar logs do Oracle DB:"
 echo -e "  ${YELLOW}az container logs --resource-group $RESOURCE_GROUP --name $CONTAINER_GROUP_NAME --container-name oracle-db --follow${NC}"
-echo -e "======================================================================
-"
+echo -e "\nPara acessar diretamente o Banco de Dados Oracle via SQL*Plus:"
+echo -e "  ${YELLOW}az container exec --resource-group $RESOURCE_GROUP --name $CONTAINER_GROUP_NAME --container-name oracle-db --exec-command \"sqlplus system/$ORACLE_PWD@localhost:1521/XEPDB1\"${NC}"
+echo -e "======================================================================\n"
