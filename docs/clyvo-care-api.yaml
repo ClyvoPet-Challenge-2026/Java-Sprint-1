@@ -139,8 +139,8 @@ collection:
             value: "Bearer {{ _.access_token }}"
         settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
       - url: "{{ _.base_url }}/estados"
-        name: GET Estados sem token (espera 401)
-        meta: { id: req_get_estados_noauth, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -340, description: "Prova que a rota e protegida." }
+        name: GET Estados sem token (espera 200)
+        meta: { id: req_get_estados_noauth, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -340, description: "Consulta publica para o cadastro de tutores." }
         method: GET
         settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
       - url: "{{ _.base_url }}/cidades"
