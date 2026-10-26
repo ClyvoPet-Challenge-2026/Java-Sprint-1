@@ -46,6 +46,18 @@ git clone https://github.com/ClyvoPet-Challenge-2026/Java-Sprint-1.git
 cd Java-Sprint-1
 ```
 
+Antes da primeira execução, gere um novo par RSA com OpenSSL (Bash/Git Bash). Os arquivos ficam fora do código-fonte e não são versionados:
+
+```bash
+mkdir -p .keys
+(umask 077; openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out .keys/private_key.pem)
+openssl pkey -in .keys/private_key.pem -pubout -out .keys/public_key.pem
+```
+
+A aplicação procura esses arquivos em `.keys` a partir do diretório de execução. Para usar outro local, defina `JWT_PRIVATE_KEY=file:/caminho/privada.pem` e `JWT_PUBLIC_KEY=file:/caminho/publica.pem` (no Windows, por exemplo, `file:C:/segredos/privada.pem`). As variáveis indicam **localizações de arquivos PEM**, não o conteúdo das chaves. Sem um par válido, a aplicação não inicia. Em containers, monte os arquivos externamente; não os copie para a imagem.
+
+O par anteriormente incluído no repositório foi removido desta versão, mas permanece no histórico Git. Substitua-o nos ambientes existentes; a troca invalida os tokens assinados com a chave antiga. O histórico não foi reescrito.
+
 Defina a conexão no mesmo terminal em que você vai iniciar a aplicação. Substitua os valores de usuário e senha pelos da sua conta Oracle.
 
 No **Bash ou Git Bash**:
@@ -190,20 +202,31 @@ A resposta contém um campo `token`. Copie o valor e envie nas próximas requisi
 Authorization: Bearer <token>
 ```
 
-O JWT vale por 30 minutos e é assinado com RSA (RS256). As chaves incluídas em `src/main/resources/keys` são de demonstração. As senhas são armazenadas com BCrypt, e o login também verifica se a conta está habilitada.
+O JWT vale por 30 minutos e é assinado com RSA (RS256). As chaves são carregadas de arquivos PEM externos, conforme a configuração de execução. As senhas são armazenadas com BCrypt, e o login também verifica se a conta está habilitada.
 
 Use `GET /auth/me` para consultar os dados do usuário autenticado. O cadastro público em `POST /responsaveis` cria contas com perfil `OWNER`.
 
 | Recurso | Consulta | Criação | Edição e exclusão |
 |---|---|---|---|
-| Responsáveis | `ADMIN` | Pública | `ADMIN` |
-| Pets | Usuário autenticado | `ADMIN` ou `OWNER` | `ADMIN` ou `OWNER` |
-| Contratações | Usuário autenticado | `ADMIN` ou `OWNER` | `ADMIN` |
-| Estados, cidades, espécies, raças e planos | Usuário autenticado | `ADMIN` | `ADMIN` |
+| Responsáveis | Próprio perfil por ID; listagem geral só `ADMIN` | Pública | Próprio perfil ou `ADMIN`; exclusão só `ADMIN` |
+| Pets | `ADMIN` ou tutor proprietário | `ADMIN` ou tutor proprietário | `ADMIN` ou tutor proprietário |
+| Contratações | `ADMIN` ou tutor proprietário | `ADMIN` ou tutor proprietário | `ADMIN`; tutor pode cancelar a própria contratação |
+| Estados e cidades | Pública | `ADMIN` | `ADMIN` |
+| Espécies, raças e planos | Usuário autenticado | `ADMIN` | `ADMIN` |
 
-A simulação aceita `ADMIN` e `OWNER`. Mudança de status e troca de plano exigem `ADMIN`. O Swagger e o login são públicos; as demais consultas exigem token.
+A simulação aceita `ADMIN` e `OWNER`. Troca de plano e mudanças de status exigem `ADMIN`, exceto o cancelamento (`INACTIVE`) da própria contratação, permitido ao tutor. O Swagger, o login e as consultas de estados e cidades são públicos; as demais consultas exigem token. O catálogo de localização permite selecionar uma cidade no cadastro antes de entrar na conta.
 
-A consulta `GET /contratacoes/minhas` filtra pelo usuário do JWT e retorna somente seus planos ativos. Nas rotas gerais de pets e contratações, a implementação atual não restringe os registros ao dono do token: o filtro usado nas telas de tutor não substitui essa validação no backend.
+A consulta `GET /contratacoes/minhas` filtra pelo usuário do JWT e retorna somente seus planos ativos. Nas rotas gerais, as listagens de tutores são filtradas no banco antes da paginação. O proprietário é identificado pelo e-mail do JWT e conferido pelo claim `ownerId`; informar outro `ownerId` não amplia o acesso. Acesso por ID a recursos de outro tutor e tentativa de transferir um pet retornam `403`. Administradores preservam o acesso global. A criação de contratações também verifica a propriedade do pet antes de gravar.
+
+### Consulta e atualização do próprio perfil
+
+`GET /responsaveis/{id}` e `PUT /responsaveis/{id}` aceitam `OWNER` para o próprio ID e `ADMIN` para qualquer responsável. O servidor compara a identidade autenticada com o ID informado; informar outro ID retorna `403`. A listagem geral e a exclusão continuam administrativas.
+
+O PUT mantém o contrato `OwnerRequest`: `name`, `cpf`, `email`, `password`, `phone` e `cityId`. Todos continuam obrigatórios, inclusive a senha, que é armazenada com BCrypt. CPF e e-mail são validados; duplicidade em outra conta retorna `409`, cidade inexistente retorna `404` e campos inválidos retornam `400`. A atualização não altera `roleName` nem `enabled`.
+
+Novos tokens incluem `ownerId`, além do e-mail no subject. A identidade é conferida por ambos para impedir que um token antigo identifique outra conta caso o e-mail seja reutilizado. Depois de alterar o e-mail, faça login novamente. Tokens anteriores sem `ownerId` recebem `401` ao carregar o perfil e precisam ser renovados por login. A alteração de senha, isoladamente, não revoga tokens já emitidos, que continuam limitados pela expiração de 30 minutos.
+
+O Mobile ainda bloqueia a edição de `OWNER` no hook de perfil; a liberação da interface será feita na etapa do aplicativo.
 
 ## Fluxos de contratação
 
@@ -269,7 +292,7 @@ As transições permitidas são:
 | `PENDING` — pendente ou pausado | `ACTIVE` ou `INACTIVE` |
 | `INACTIVE` — encerrado | Nenhum |
 
-Repetir o status atual ou tentar reativar uma contratação encerrada retorna `409`. Para um pet cujo contrato foi encerrado, você pode criar outra contratação.
+Para administradores, repetir o status atual ou tentar reativar uma contratação encerrada retorna `409`. Tutores podem enviar somente `INACTIVE` para uma contratação própria; outros destinos retornam `403`. Repetir o cancelamento retorna `409`. Para um pet cujo contrato foi encerrado, você pode criar outra contratação.
 
 A troca de plano usa `POST /contratacoes/{id}/troca-plano`:
 
@@ -383,9 +406,11 @@ Esses exemplos usam Bash. No PowerShell, use `curl.exe` e escreva cada comando e
 
 ### Testes disponíveis
 
-O teste Java existente, `ClyvoCareApiApplicationTests`, verifica a inicialização do contexto Spring. Ele usa a configuração de banco da aplicação, portanto depende de um Oracle acessível e pode aplicar migrations durante a inicialização. Ainda não há uma suíte de testes unitários das regras de contratação.
+`ClyvoCareApiApplicationTests` verifica a inicialização do contexto Spring com H2 em memória. `OwnerIsolationTests` exercita os endpoints com MockMvc, persistência H2 e identidades JWT de teste: isolamento entre tutores, paginação, adulteração de proprietário, contratação com desconto, duplicidade, cancelamento e acesso administrativo. `OwnerProfileTests` cobre consulta e edição do próprio perfil, validação de dados, duplicidades, permissões administrativas e troca de e-mail com novo login, inclusive reutilização do endereço antigo por outra conta. Os testes geram um par RSA temporário, desabilitam Flyway e seeds e não acessam o Oracle. Eles não substituem a validação das migrations e da concorrência no Oracle.
 
-Para executá-lo, use `./mvnw test` ou `.\mvnw.cmd test`.
+Para executar a suíte, use `./mvnw test` ou `.\mvnw.cmd test`.
+
+`LocationSecurityTests` verifica a leitura pública de estados e cidades, a rejeição de escrita por visitantes e tutores, a criação por administradores e a exigência de autenticação nas demais rotas. Usa MockMvc com os serviços simulados, sem acessar o Oracle. Para executar somente esses testes, use `./mvnw -Dtest=LocationSecurityTests test`.
 
 O script `azure-acr-aci-test.sh` faz verificações HTTP de documentação, login, consultas e cadastro de tutor e pet. Ele cria dados no ambiente informado. Você pode passar a URL explicitamente:
 
@@ -394,6 +419,8 @@ bash azure-acr-aci-test.sh http://SEU_FQDN:8080
 ```
 
 ## Deploy no Azure ACR + ACI
+
+O script exige o par PEM externo antes de provisionar recursos. Por padrão, usa `.keys/private_key.pem` e `.keys/public_key.pem`; para outros caminhos locais, configure `JWT_PRIVATE_KEY_FILE` e `JWT_PUBLIC_KEY_FILE`. As chaves são montadas como volume secreto no ACI, em `/app/.keys`. O manifesto gerado contém segredos codificados em Base64 (não criptografados), é criado com permissões restritas e está ignorado pelo Git e Docker. Não o publique.
 
 Este é o fluxo usado para a entrega de **DevOps Tools & Cloud Computing da Sprint 3**, na opção **ACR + ACI**: a aplicação e o banco rodam em containers na nuvem. O script [azure-acr-aci-setup.sh](azure-acr-aci-setup.sh) cria os recursos via Azure CLI, publica a imagem da API no Azure Container Registry e sobe um grupo no Azure Container Instances com dois containers: a API e um Oracle XE 21.
 
@@ -575,8 +602,7 @@ src/main/
 │   └── validation/    tratamento dos erros de validação
 └── resources/
     ├── application.properties
-    ├── db/migration/  V1, V2 e V3
-    └── keys/          chaves RSA de demonstração
+    └── db/migration/  V1, V2 e V3
 ```
 
 Os DTOs são records que separam o JSON das entidades. Os controllers recebem os DTOs de entrada, chamam os serviços e convertem os resultados em DTOs de resposta. Os serviços recebem as requisições tipadas e trabalham com entidades para aplicar as regras e persistir os dados.
