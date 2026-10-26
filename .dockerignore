@@ -1,0 +1,6 @@
+.git
+.keys
+**/private_key.pem
+**/app.key
+aci-deployment.generated.yaml
+target

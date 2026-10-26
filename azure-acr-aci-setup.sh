@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+umask 077
 
 # ==============================================================================
 # ClyvoCare API - Script de Automação Azure (ACR + ACI)
@@ -24,6 +25,16 @@ RANDOM_SUFFIX=$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 5 | head -n 1)
 ACR_NAME="${ACR_NAME:-acrclyvo${RANDOM_SUFFIX}}"
 CONTAINER_GROUP_NAME="${CONTAINER_GROUP_NAME:-aci-clyvocare-group}"
 DNS_LABEL="${DNS_LABEL:-clyvocare-api-${RANDOM_SUFFIX}}"
+
+# Chaves externas, montadas como volume secreto; nunca entram na imagem.
+JWT_PRIVATE_KEY_FILE="${JWT_PRIVATE_KEY_FILE:-.keys/private_key.pem}"
+JWT_PUBLIC_KEY_FILE="${JWT_PUBLIC_KEY_FILE:-.keys/public_key.pem}"
+if [ ! -r "$JWT_PRIVATE_KEY_FILE" ] || [ ! -r "$JWT_PUBLIC_KEY_FILE" ]; then
+    echo "[ERRO] Configure JWT_PRIVATE_KEY_FILE e JWT_PUBLIC_KEY_FILE com os arquivos PEM."
+    exit 1
+fi
+JWT_PRIVATE_KEY_BASE64=$(base64 < "$JWT_PRIVATE_KEY_FILE" | tr -d '\n')
+JWT_PUBLIC_KEY_BASE64=$(base64 < "$JWT_PUBLIC_KEY_FILE" | tr -d '\n')
 
 ORACLE_PWD="${ORACLE_PWD:-Oracle_123}"
 APP_DB_USER="${APP_DB_USER:-clyvocare}"
@@ -94,6 +105,11 @@ name: $CONTAINER_GROUP_NAME
 properties:
   osType: Linux
   restartPolicy: Always
+  volumes:
+    - name: jwt-keys
+      secret:
+        private_key.pem: "$JWT_PRIVATE_KEY_BASE64"
+        public_key.pem: "$JWT_PUBLIC_KEY_BASE64"
   imageRegistryCredentials:
     - server: $ACR_LOGIN_SERVER
       username: $ACR_USERNAME
@@ -126,6 +142,10 @@ properties:
     - name: clyvocare-api
       properties:
         image: $ACR_LOGIN_SERVER/clyvocare-api:v1
+        volumeMounts:
+          - name: jwt-keys
+            mountPath: /app/.keys
+            readOnly: true
         resources:
           requests:
             cpu: 1.0

@@ -41,3 +41,8 @@ docker-compose.yml
 
 ### Azure ###
 aci-deployment.generated.yaml
+
+### JWT ###
+.keys/
+**/private_key.pem
+**/app.key
