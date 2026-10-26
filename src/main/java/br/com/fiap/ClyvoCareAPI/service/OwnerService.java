@@ -1,10 +1,13 @@
 package br.com.fiap.ClyvoCareAPI.service;
 
+import br.com.fiap.ClyvoCareAPI.auth.OwnerAccessService;
 import br.com.fiap.ClyvoCareAPI.dto.OwnerRequest;
 import br.com.fiap.ClyvoCareAPI.entity.City;
 import br.com.fiap.ClyvoCareAPI.entity.Owner;
 import br.com.fiap.ClyvoCareAPI.repository.OwnerRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -16,6 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class OwnerService {
     private final OwnerRepository ownerRepository;
+    private final OwnerAccessService ownerAccessService;
     private final CityService cityService;
     private final PasswordEncoder passwordEncoder;
 
@@ -28,6 +32,7 @@ public class OwnerService {
     }
 
     public Owner findOwnerById(Long id) {
+        ownerAccessService.validateOwner(id);
         return ownerRepository.findById(id).orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         String.format("Owner with ID %d not found", id))
@@ -58,8 +63,17 @@ public class OwnerService {
         return ownerRepository.save(owner);
     }
 
+    @Transactional
     public Owner updateOwner(Long id, OwnerRequest request) {
         Owner existing = findOwnerById(id);
+        if (ownerRepository.existsByCpfAndIdNot(request.cpf(), id)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    String.format("CPF %s is already registered", request.cpf()));
+        }
+        if (ownerRepository.existsByEmailAndIdNot(request.email(), id)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    String.format("Email %s is already registered", request.email()));
+        }
         City city = cityService.findCityById(request.cityId());
         existing.setName(request.name());
         existing.setCpf(request.cpf());
@@ -67,7 +81,11 @@ public class OwnerService {
         existing.setPhone(request.phone());
         existing.setCity(city);
         existing.setPasswordHash(passwordEncoder.encode(request.password()));
-        return ownerRepository.save(existing);
+        try {
+            return ownerRepository.saveAndFlush(existing);
+        } catch (DataIntegrityViolationException exception) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Owner data conflicts with an existing record");
+        }
     }
 
     public void deleteOwner(Long id) {

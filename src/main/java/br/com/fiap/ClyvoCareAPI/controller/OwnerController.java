@@ -37,10 +37,11 @@ public class OwnerController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Busca responsável por ID")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @Operation(summary = "Busca o próprio responsável por ID (ADMIN pode consultar qualquer responsável)")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Responsável encontrado"),
+            @ApiResponse(responseCode = "403", description = "Responsável pertence a outro tutor"),
             @ApiResponse(responseCode = "404", description = "Responsável não encontrado")
     })
     public OwnerResponse findById(@PathVariable Long id) {
@@ -62,10 +63,12 @@ public class OwnerController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Atualiza um responsável existente (senha é re-hasheada)")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @Operation(summary = "Atualiza o próprio responsável (ADMIN pode atualizar qualquer responsável; senha é re-hasheada)")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Responsável atualizado"),
+            @ApiResponse(responseCode = "403", description = "Responsável pertence a outro tutor"),
+            @ApiResponse(responseCode = "409", description = "CPF ou email já cadastrado"),
             @ApiResponse(responseCode = "400", description = "Erro de validação"),
             @ApiResponse(responseCode = "404", description = "Responsável ou cidade não encontrado")
     })
