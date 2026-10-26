@@ -123,7 +123,7 @@ public class SubscriptionController {
     }
 
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @Operation(summary = "Altera o status conforme as transições permitidas")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Status atualizado"),

@@ -1,5 +1,6 @@
 package br.com.fiap.ClyvoCareAPI.service;
 
+import br.com.fiap.ClyvoCareAPI.auth.OwnerAccessService;
 import br.com.fiap.ClyvoCareAPI.dto.PetRequest;
 import br.com.fiap.ClyvoCareAPI.entity.Breed;
 import br.com.fiap.ClyvoCareAPI.entity.Owner;
@@ -17,6 +18,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class PetService {
     private final PetRepository petRepository;
+    private final OwnerAccessService ownerAccessService;
     private final OwnerService ownerService;
     private final SpeciesService speciesService;
     private final BreedService breedService;
@@ -28,28 +30,33 @@ public class PetService {
             Long breedId,
             Pageable pageable
     ) {
-        return petRepository.search(name, ownerId, speciesId, breedId, pageable);
+        return petRepository.search(name, ownerAccessService.restrictOwnerId(ownerId), speciesId, breedId, pageable);
     }
 
     public Pet findPetById(Long id) {
-        return petRepository.findById(id).orElseThrow(
+        Pet pet = petRepository.findById(id).orElseThrow(
                 () -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         String.format("Pet with ID %d not found", id)
                 )
         );
+        ownerAccessService.validateOwner(pet.getOwner().getId());
+        return pet;
     }
 
     public Pet findPetByIdForUpdate(Long id) {
-        return petRepository.findByIdForUpdate(id).orElseThrow(
+        Pet pet = petRepository.findByIdForUpdate(id).orElseThrow(
                 () -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         String.format("Pet with ID %d not found", id)
                 )
         );
+        ownerAccessService.validateOwner(pet.getOwner().getId());
+        return pet;
     }
 
     public Pet createPet(PetRequest request) {
+        ownerAccessService.validateOwner(request.ownerId());
         Owner owner = ownerService.findOwnerById(request.ownerId());
         Species species = speciesService.findSpeciesById(request.speciesId());
         Breed breed = request.breedId() != null
@@ -61,6 +68,7 @@ public class PetService {
 
     public Pet updatePet(Long id, PetRequest request) {
         Pet existing = findPetById(id);
+        ownerAccessService.validateOwner(request.ownerId());
         Owner owner = ownerService.findOwnerById(request.ownerId());
         Species species = speciesService.findSpeciesById(request.speciesId());
         Breed breed = request.breedId() != null
@@ -78,13 +86,7 @@ public class PetService {
     }
 
     public void deletePet(Long id) {
-        if (!petRepository.existsById(id)) {
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    String.format("Pet with ID %d not found", id)
-            );
-        }
-
+        findPetById(id);
         petRepository.deleteById(id);
     }
 }

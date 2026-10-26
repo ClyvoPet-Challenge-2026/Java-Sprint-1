@@ -35,6 +35,7 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, Long
     );
 
     @Query("SELECT s FROM Subscription s WHERE " +
+            "(:ownerId IS NULL OR s.pet.owner.id = :ownerId) AND " +
             "(:petId IS NULL OR s.pet.id = :petId) AND " +
             "(:planId IS NULL OR s.plan.id = :planId) AND " +
             "(:status IS NULL OR s.status = :status) AND " +
@@ -44,6 +45,7 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, Long
             @Param("planId") Long planId,
             @Param("status") SubscriptionStatus status,
             @Param("paymentMethod") PaymentMethod paymentMethod,
+            @Param("ownerId") Long ownerId,
             Pageable pageable
     );
 }
