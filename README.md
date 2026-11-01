@@ -156,17 +156,39 @@ O `DataInitializer` fica como alternativa para ambientes com Flyway explicitamen
 
 [script_bd.sql](script_bd.sql) e [docs/script.sql](docs/script.sql) são os scripts completos da entrega de Database. Eles contêm criação de tabelas, dados e PL/SQL, incluindo comandos de exclusão de tabelas. **Você não precisa executá-los para iniciar a API com Flyway.**
 
-O diagrama de modelagem está em [docs/MER.png](docs/MER.png). Entre os objetos de banco estão:
+O diagrama de modelagem está em [docs/MER.png](docs/MER.png). Após aplicar a migration V4 pelo Flyway, os objetos de banco incluem:
 
 | Objeto | Uso |
 |---|---|
-| `FN_SUBSCRIPTION_TO_JSON` | Monta o JSON de uma contratação com seus relacionamentos |
-| `FN_CALCULATE_CONTRACT_VALUE` | Calcula o valor do plano conforme o pagamento |
-| `SP_REPORT_SUBSCRIPTIONS_JSON` | Exibe contratações em JSON, com filtro de status |
-| `SP_REPORT_REVENUE_FACT` | Exibe valores agrupados por plano e status, com subtotais |
+| `PKG_JSON.SUBSCRIPTION_TO_JSON` | Monta o JSON de uma contratação com seus relacionamentos |
+| `PKG_FINANCEIRO.CALCULATE_CONTRACT_VALUE` | Calcula o valor do plano conforme o pagamento |
+| `PKG_RELATORIOS.REPORT_SUBSCRIPTIONS` | Retorna contratações em JSON, com filtro de status |
+| `PKG_RELATORIOS.REPORT_REVENUE` | Retorna valores agrupados por plano e status, subtotais e total geral |
 | `TRG_SUBSCRIPTION_AUDIT` | Registra inclusões, alterações e exclusões de contratações |
 
 O cálculo usado pela API está em `ContractPricingService`. A função SQL mantém as mesmas taxas para uso no banco; o serviço Java não chama essa função.
+
+### Relatórios administrativos via Oracle
+
+Os endpoints abaixo exigem token de `ADMIN` e executam as procedures do package `PKG_RELATORIOS` por JDBC. Não usam consultas JPA como substituição quando o package está ausente.
+
+| Método e rota | Parâmetros | Resposta |
+|---|---|---|
+| `GET /relatorios/contratacoes` | `status` opcional: `ACTIVE`, `INACTIVE` ou `PENDING` | `items` com o JSON produzido pelo Oracle e `totalCount` |
+| `GET /relatorios/receita` | `minValue` opcional, padrão `0`, de `0` a `99999999.99`, com até duas casas decimais | `items` com linhas de detalhe/subtotal e `grandTotal` |
+
+As linhas de receita têm `lineType` (`DETAIL` ou `SUBTOTAL`), `planName`, `status`, `quantity` e `amount`. O status de um subtotal é nulo. O total geral vem separado em `grandTotal`; não some novamente as linhas de subtotal aos detalhes. O relatório de contratações mantém os campos da função SQL, incluindo dados do tutor, e fica restrito à administração.
+
+Exemplos no Bash, usando um token de administrador obtido no login:
+
+```bash
+curl -H "Authorization: Bearer $ADMIN_TOKEN" 'http://localhost:8080/relatorios/contratacoes?status=ACTIVE'
+curl -H "Authorization: Bearer $ADMIN_TOKEN" 'http://localhost:8080/relatorios/receita?minValue=10.50'
+```
+
+Sem registros correspondentes, as procedures sinalizam os códigos Oracle `20031` ou `20041`, e a API responde `200` com lista vazia e total zero. Parâmetros inválidos retornam `400`, visitante recebe `401` e tutor recebe `403`. Falha de execução, package indisponível ou JSON inválido retornam `503` com mensagem genérica; registros de erro embutidos no JSON não são apresentados como sucesso.
+
+Antes de demonstrar, confira a versão 4 em `flyway_schema_history` e os packages/trigger em `USER_OBJECTS` e `USER_ERRORS`. O Flyway aplica a migration na inicialização normal; os scripts destrutivos de demonstração não são necessários para essa atualização. O deploy ACI descrito abaixo ainda desabilita Flyway e precisa ser ajustado antes de usar esses relatórios.
 
 ## Autenticação e permissões
 
@@ -376,7 +398,7 @@ As respostas paginadas trazem os registros em `content` e informações como `to
 
 ### Swagger, Insomnia ou curl
 
-O Swagger permite consultar o contrato e enviar requisições às rotas públicas. A configuração atual não declara o esquema Bearer na documentação, então não há botão **Authorize** para informar o token. Para chamar as rotas protegidas, use Insomnia ou curl.
+O Swagger permite consultar o contrato e enviar requisições. Use o botão **Authorize** para informar o JWT retornado pelo login, sem o prefixo `Bearer`. Para os relatórios, faça login com uma conta `ADMIN`. Você também pode usar Insomnia ou curl.
 
 A coleção [docs/clyvo-care-api.yaml](docs/clyvo-care-api.yaml) tem os ambientes **Base Environment**, para localhost, e **Azure ACI**. Ajuste `base_url` para o endereço da API e execute o login da pasta `00 - Autenticacao`. O script da requisição salva o JWT em `access_token`.
 
@@ -403,7 +425,9 @@ Esses exemplos usam Bash. No PowerShell, use `curl.exe` e escreva cada comando e
 
 Os testes verificam a inicialização do contexto, assinatura/verificação de JWT, permissões de dois tutores e administrador, isolamento de pets e contratações, edição de perfil, cancelamento e desativação de conta. Também conferem os descontos da simulação e a recusa de contratação ativa duplicada. A configuração compartilhada usa H2 em memória e um par RSA temporário, com Flyway e carga de demonstração desabilitados; não usa o Oracle nem as chaves locais da aplicação. Esses testes não validam migrations, concorrência real ou particularidades do Oracle.
 
-Para executá-lo, use `./mvnw test` ou `.\mvnw.cmd test`.
+Os testes dos relatórios usam JDBC simulado para conferir parâmetros, leitura do CLOB/cursor, valores decimais, códigos de ausência de dados e liberação de recursos. Os testes HTTP conferem autorização, parâmetros, respostas e tratamento de falhas. Eles não executam os packages no Oracle; essa evidência deve ser obtida no ambiente com V4 aplicada.
+
+Para executar a suíte, use `./mvnw test` ou `.\mvnw.cmd test`.
 
 O script `azure-acr-aci-test.sh` faz verificações HTTP de documentação, login, consultas e cadastro de tutor e pet. Ele cria dados no ambiente informado. Você pode passar a URL explicitamente:
 
