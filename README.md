@@ -188,7 +188,22 @@ A resposta contém um campo `token`. Copie o valor e envie nas próximas requisi
 Authorization: Bearer <token>
 ```
 
-O JWT vale por 30 minutos e é assinado com RSA (RS256). As chaves incluídas em `src/main/resources/keys` são de demonstração. As senhas são armazenadas com BCrypt, e o login também verifica se a conta está habilitada.
+O JWT vale por 30 minutos e é assinado com RSA (RS256). As chaves são carregadas de arquivos externos: `.keys/private_key.pem` e `.keys/public_key.pem`, relativos à pasta de execução da API. Esses arquivos não entram no Git nem na imagem Docker. As senhas são armazenadas com BCrypt, e o login também verifica se a conta está habilitada.
+
+Para usar outro caminho, defina `JWT_PRIVATE_KEY` e `JWT_PUBLIC_KEY` como localizações de arquivo, por exemplo `file:/run/secrets/private_key.pem` e `file:/run/secrets/public_key.pem`. As variáveis recebem o caminho, não o conteúdo PEM. A API precisa dos dois arquivos para iniciar; a API .NET deve receber somente a pública correspondente.
+
+Se ainda não tiver um par de chaves, gere-o no Bash com OpenSSL:
+
+```bash
+mkdir -p .keys
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out .keys/private_key.pem
+openssl pkey -in .keys/private_key.pem -pubout -out .keys/public_key.pem
+chmod 600 .keys/private_key.pem
+```
+
+Não sobrescreva um par em uso sem atualizar os serviços que o utilizam. O par anteriormente versionado permanece no histórico do Git e deve ser substituído antes de publicar o ambiente; remover os arquivos da revisão atual não revoga tokens. A troca de par exige novo login dos usuários.
+
+No script Azure, `JWT_PRIVATE_KEY_FILE` e `JWT_PUBLIC_KEY_FILE` indicam os arquivos locais a montar no container. O padrão é o mesmo diretório `.keys`. O manifesto gerado contém segredos em Base64, fica com permissões restritas e não deve ser compartilhado ou versionado.
 
 Use `GET /auth/me` para consultar os dados do usuário autenticado. O cadastro público em `POST /responsaveis` cria contas com perfil `OWNER`.
 
@@ -381,7 +396,7 @@ Esses exemplos usam Bash. No PowerShell, use `curl.exe` e escreva cada comando e
 
 ### Testes disponíveis
 
-O teste Java existente, `ClyvoCareApiApplicationTests`, verifica a inicialização do contexto Spring. Ele usa a configuração de banco da aplicação, portanto depende de um Oracle acessível e pode aplicar migrations durante a inicialização. Ainda não há uma suíte de testes unitários das regras de contratação.
+Os testes em `ClyvoCareApiApplicationTests` verificam a inicialização do contexto com H2 em memória e a assinatura/verificação de JWT usando um par RSA temporário. A configuração de testes desabilita Flyway e a carga de demonstração; não usa o Oracle nem as chaves locais da aplicação. Ainda não há uma suíte de testes das regras de contratação. Esses testes não validam migrations ou particularidades do Oracle.
 
 Para executá-lo, use `./mvnw test` ou `.\mvnw.cmd test`.
 
@@ -573,8 +588,7 @@ src/main/
 │   └── validation/    tratamento dos erros de validação
 └── resources/
     ├── application.properties
-    ├── db/migration/  V1, V2 e V3
-    └── keys/          chaves RSA de demonstração
+    └── db/migration/  versionamento do banco
 ```
 
 Os DTOs são records que separam o JSON das entidades. Os controllers recebem os DTOs de entrada, chamam os serviços e convertem os resultados em DTOs de resposta. Os serviços recebem as requisições tipadas e trabalham com entidades para aplicar as regras e persistir os dados.

@@ -1,0 +1,5 @@
+.git
+.keys
+**/*.pem
+target
+aci-deployment.generated.yaml

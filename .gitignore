@@ -41,3 +41,7 @@ docker-compose.yml
 
 ### Azure ###
 aci-deployment.generated.yaml
+
+### External signing keys ###
+.keys/
+*.pem

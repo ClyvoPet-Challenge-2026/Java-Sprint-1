@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+umask 077
 
 # ==============================================================================
 # ClyvoCare API - Script de Automação Azure (ACR + ACI)
@@ -28,6 +29,17 @@ DNS_LABEL="${DNS_LABEL:-clyvocare-api-${RANDOM_SUFFIX}}"
 ORACLE_PWD="${ORACLE_PWD:-Oracle_123}"
 APP_DB_USER="${APP_DB_USER:-clyvocare}"
 APP_DB_PWD="${APP_DB_PWD:-clyvo123}"
+
+JWT_PRIVATE_KEY_FILE="${JWT_PRIVATE_KEY_FILE:-.keys/private_key.pem}"
+JWT_PUBLIC_KEY_FILE="${JWT_PUBLIC_KEY_FILE:-.keys/public_key.pem}"
+for key_file in "$JWT_PRIVATE_KEY_FILE" "$JWT_PUBLIC_KEY_FILE"; do
+    if [ ! -s "$key_file" ]; then
+        echo "Missing RSA key file: $key_file" >&2
+        exit 1
+    fi
+done
+JWT_PRIVATE_KEY_BASE64=$(base64 < "$JWT_PRIVATE_KEY_FILE" | tr -d '\r\n')
+JWT_PUBLIC_KEY_BASE64=$(base64 < "$JWT_PUBLIC_KEY_FILE" | tr -d '\r\n')
 
 echo -e "
 ${YELLOW}[INFO] Parâmetros de Execução:${NC}"
@@ -86,6 +98,8 @@ docker push "$ACR_LOGIN_SERVER/clyvocare-api:v1"
 echo -e "
 ${YELLOW}=== 7. Gerando manifesto declarativo para o Container Group (Multi-Container: App + Oracle) ===${NC}"
 ACI_YAML_FILE="aci-deployment.generated.yaml"
+touch "$ACI_YAML_FILE"
+chmod 600 "$ACI_YAML_FILE"
 
 cat <<EOF > "$ACI_YAML_FILE"
 apiVersion: 2021-10-01
@@ -94,6 +108,11 @@ name: $CONTAINER_GROUP_NAME
 properties:
   osType: Linux
   restartPolicy: Always
+  volumes:
+    - name: jwt-keys
+      secret:
+        private_key.pem: "$JWT_PRIVATE_KEY_BASE64"
+        public_key.pem: "$JWT_PUBLIC_KEY_BASE64"
   imageRegistryCredentials:
     - server: $ACR_LOGIN_SERVER
       username: $ACR_USERNAME
@@ -126,11 +145,19 @@ properties:
     - name: clyvocare-api
       properties:
         image: $ACR_LOGIN_SERVER/clyvocare-api:v1
+        volumeMounts:
+          - name: jwt-keys
+            mountPath: /run/secrets/jwt
+            readOnly: true
         resources:
           requests:
             cpu: 1.0
             memoryInGB: 1.5
         environmentVariables:
+          - name: JWT_PRIVATE_KEY
+            value: "file:/run/secrets/jwt/private_key.pem"
+          - name: JWT_PUBLIC_KEY
+            value: "file:/run/secrets/jwt/public_key.pem"
           - name: SPRING_DATASOURCE_URL
             value: "jdbc:oracle:thin:@127.0.0.1:1521/XEPDB1"
           - name: SPRING_DATASOURCE_USERNAME
