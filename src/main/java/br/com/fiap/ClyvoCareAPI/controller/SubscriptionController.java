@@ -20,8 +20,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -35,10 +33,9 @@ public class SubscriptionController {
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @Operation(summary = "Lista os planos ativos dos pets do usuário autenticado")
     public Page<SubscriptionResponse> findMyActiveSubscriptions(
-            @AuthenticationPrincipal Jwt jwt,
             Pageable pageable
     ) {
-        return subscriptionService.findActiveSubscriptionsByOwnerEmail(jwt.getSubject(), pageable)
+        return subscriptionService.findMyActiveSubscriptions(pageable)
                 .map(SubscriptionResponse::fromEntity);
     }
 
@@ -123,7 +120,7 @@ public class SubscriptionController {
     }
 
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @Operation(summary = "Altera o status conforme as transições permitidas")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Status atualizado"),

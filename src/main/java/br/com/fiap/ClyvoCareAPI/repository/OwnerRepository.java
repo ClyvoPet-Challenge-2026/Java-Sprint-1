@@ -15,6 +15,10 @@ public interface OwnerRepository extends JpaRepository<Owner, Long> {
 
     boolean existsByEmail(String email);
 
+    boolean existsByCpfAndIdNot(String cpf, Long id);
+
+    boolean existsByEmailAndIdNot(String email, Long id);
+
     Optional<Owner> findByEmail(String email);
 
     @Query("SELECT o FROM Owner o WHERE " +

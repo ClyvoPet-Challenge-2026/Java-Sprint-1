@@ -37,7 +37,7 @@ public class OwnerController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @Operation(summary = "Busca responsável por ID")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Responsável encontrado"),
@@ -62,7 +62,7 @@ public class OwnerController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @Operation(summary = "Atualiza um responsável existente (senha é re-hasheada)")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Responsável atualizado"),
@@ -74,10 +74,10 @@ public class OwnerController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Remove um responsável")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @Operation(summary = "Desativa um responsável, preservando os registros relacionados")
     @ApiResponses({
-            @ApiResponse(responseCode = "204", description = "Responsável removido"),
+            @ApiResponse(responseCode = "204", description = "Responsável desativado"),
             @ApiResponse(responseCode = "404", description = "Responsável não encontrado")
     })
     public ResponseEntity<Void> delete(@PathVariable Long id) {

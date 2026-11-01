@@ -1,5 +1,7 @@
 package br.com.fiap.ClyvoCareAPI.auth;
 
+import br.com.fiap.ClyvoCareAPI.repository.OwnerRepository;
+
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
@@ -20,6 +22,12 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
@@ -41,6 +49,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/responsaveis").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/estados", "/estados/*", "/cidades", "/cidades/*").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         .anyRequest().authenticated()
                 )
@@ -66,10 +75,25 @@ public class SecurityConfig {
     }
 
     @Bean
-    JwtDecoder jwtDecoder(RsaKeyProperties rsaKeyProperties) {
-        return NimbusJwtDecoder
+    JwtDecoder jwtDecoder(RsaKeyProperties rsaKeyProperties, OwnerRepository ownerRepository) {
+        var decoder = NimbusJwtDecoder
                 .withPublicKey(rsaKeyProperties.publicKey())
                 .build();
+        OAuth2TokenValidator<Jwt> accountValidator = jwt -> {
+            boolean valid = jwt.getExpiresAt() != null && jwt.getSubject() != null
+                    && ownerRepository.findByEmail(jwt.getSubject())
+                    .filter(owner -> owner.isEnabled()
+                            && owner.getId().toString().equals(String.valueOf(jwt.getClaims().get("ownerId")))
+                            && owner.getRoleName().equals(jwt.getClaims().get("role"))
+                            && (owner.getRoleName().equals("ADMIN") || owner.getRoleName().equals("OWNER")))
+                    .isPresent();
+            return valid ? OAuth2TokenValidatorResult.success()
+                    : OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token",
+                            "Token does not match an active account; sign in again", null));
+        };
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
+                JwtValidators.createDefaultWithIssuer("clyvocare-api"), accountValidator));
+        return decoder;
     }
 
     @Bean

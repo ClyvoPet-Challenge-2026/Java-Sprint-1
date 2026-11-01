@@ -15,13 +15,6 @@ import java.util.Optional;
 
 public interface SubscriptionRepository extends JpaRepository<Subscription, Long> {
 
-    @Query("SELECT s FROM Subscription s WHERE s.pet.owner.email = :email AND s.status = :status")
-    Page<Subscription> findByOwnerEmailAndStatus(
-            @Param("email") String email,
-            @Param("status") SubscriptionStatus status,
-            Pageable pageable
-    );
-
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM Subscription s WHERE s.id = :id")
     Optional<Subscription> findByIdForUpdate(@Param("id") Long id);
@@ -35,11 +28,13 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, Long
     );
 
     @Query("SELECT s FROM Subscription s WHERE " +
+            "(:ownerId IS NULL OR s.pet.owner.id = :ownerId) AND " +
             "(:petId IS NULL OR s.pet.id = :petId) AND " +
             "(:planId IS NULL OR s.plan.id = :planId) AND " +
             "(:status IS NULL OR s.status = :status) AND " +
             "(:paymentMethod IS NULL OR s.paymentMethod = :paymentMethod)")
     Page<Subscription> search(
+            @Param("ownerId") Long ownerId,
             @Param("petId") Long petId,
             @Param("planId") Long planId,
             @Param("status") SubscriptionStatus status,

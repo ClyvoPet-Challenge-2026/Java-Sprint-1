@@ -1,6 +1,7 @@
 package br.com.fiap.ClyvoCareAPI.service;
 
 import br.com.fiap.ClyvoCareAPI.dto.PetRequest;
+import br.com.fiap.ClyvoCareAPI.auth.OwnerAccessService;
 import br.com.fiap.ClyvoCareAPI.entity.Breed;
 import br.com.fiap.ClyvoCareAPI.entity.Owner;
 import br.com.fiap.ClyvoCareAPI.entity.Pet;
@@ -20,6 +21,7 @@ public class PetService {
     private final OwnerService ownerService;
     private final SpeciesService speciesService;
     private final BreedService breedService;
+    private final OwnerAccessService ownerAccess;
 
     public Page<Pet> searchPets(
             String name,
@@ -28,25 +30,29 @@ public class PetService {
             Long breedId,
             Pageable pageable
     ) {
-        return petRepository.search(name, ownerId, speciesId, breedId, pageable);
+        return petRepository.search(name, ownerAccess.restrictOwnerId(ownerId), speciesId, breedId, pageable);
     }
 
     public Pet findPetById(Long id) {
-        return petRepository.findById(id).orElseThrow(
+        Pet pet = petRepository.findById(id).orElseThrow(
                 () -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         String.format("Pet with ID %d not found", id)
                 )
         );
+        ownerAccess.restrictOwnerId(pet.getOwner().getId());
+        return pet;
     }
 
     public Pet findPetByIdForUpdate(Long id) {
-        return petRepository.findByIdForUpdate(id).orElseThrow(
+        Pet pet = petRepository.findByIdForUpdate(id).orElseThrow(
                 () -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         String.format("Pet with ID %d not found", id)
                 )
         );
+        ownerAccess.restrictOwnerId(pet.getOwner().getId());
+        return pet;
     }
 
     public Pet createPet(PetRequest request) {
@@ -78,13 +84,7 @@ public class PetService {
     }
 
     public void deletePet(Long id) {
-        if (!petRepository.existsById(id)) {
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    String.format("Pet with ID %d not found", id)
-            );
-        }
-
+        findPetById(id);
         petRepository.deleteById(id);
     }
 }

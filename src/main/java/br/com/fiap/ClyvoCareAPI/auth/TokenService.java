@@ -29,6 +29,7 @@ public class TokenService {
                 .expiresAt(now.plus(30, ChronoUnit.MINUTES))
                 .subject(owner.getEmail())
                 .claim("role", owner.getRoleName())
+                .claim("ownerId", owner.getId())
                 .build();
 
         return encoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();

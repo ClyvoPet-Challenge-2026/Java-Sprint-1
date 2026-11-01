@@ -2,35 +2,21 @@ package br.com.fiap.ClyvoCareAPI;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
+import br.com.fiap.ClyvoCareAPI.support.ApiIntegrationTest;
+import br.com.fiap.ClyvoCareAPI.entity.Owner;
+import br.com.fiap.ClyvoCareAPI.repository.OwnerRepository;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 
 import javax.sql.DataSource;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.security.KeyPairGenerator;
 import java.time.Instant;
-import java.util.Base64;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:clyvocare-tests;DB_CLOSE_DELAY=-1",
-        "spring.datasource.driver-class-name=org.h2.Driver",
-        "spring.datasource.username=sa",
-        "spring.datasource.password=",
-        "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-        "spring.jpa.hibernate.ddl-auto=create-drop",
-        "spring.flyway.enabled=false",
-        "app.seed.enabled=false"
-})
-class ClyvoCareApiApplicationTests {
+class ClyvoCareApiApplicationTests extends ApiIntegrationTest {
 
     @Autowired
     private DataSource dataSource;
@@ -41,27 +27,8 @@ class ClyvoCareApiApplicationTests {
     @Autowired
     private JwtDecoder decoder;
 
-    @DynamicPropertySource
-    static void signingKeys(DynamicPropertyRegistry registry) throws Exception {
-        Path directory = Files.createTempDirectory("clyvocare-test-keys-");
-        directory.toFile().deleteOnExit();
-        var generator = KeyPairGenerator.getInstance("RSA");
-        generator.initialize(2048);
-        var pair = generator.generateKeyPair();
-        Path privateKey = directory.resolve("private_key.pem");
-        Path publicKey = directory.resolve("public_key.pem");
-        writePem(privateKey, "PRIVATE KEY", pair.getPrivate().getEncoded());
-        writePem(publicKey, "PUBLIC KEY", pair.getPublic().getEncoded());
-        registry.add("rsa.private-key", () -> privateKey.toUri().toString());
-        registry.add("rsa.public-key", () -> publicKey.toUri().toString());
-    }
-
-    private static void writePem(Path path, String label, byte[] bytes) throws Exception {
-        String encoded = Base64.getMimeEncoder(64, new byte[]{'\n'}).encodeToString(bytes);
-        Files.writeString(path, "-----BEGIN " + label + "-----\n" + encoded
-                + "\n-----END " + label + "-----\n");
-        path.toFile().deleteOnExit();
-    }
+    @Autowired
+    private OwnerRepository owners;
 
     @Test
     void contextLoadsWithIsolatedDatabase() throws Exception {
@@ -72,6 +39,8 @@ class ClyvoCareApiApplicationTests {
 
     @Test
     void signedTokenCanBeVerifiedWithExternalPublicKey() {
+        var owner = owners.saveAndFlush(Owner.builder().email("test-owner@example.com")
+                .roleName("OWNER").enabled(true).build());
         var now = Instant.now();
         var claims = JwtClaimsSet.builder()
                 .issuer("clyvocare-api")
@@ -79,6 +48,7 @@ class ClyvoCareApiApplicationTests {
                 .issuedAt(now)
                 .expiresAt(now.plusSeconds(60))
                 .claim("role", "OWNER")
+                .claim("ownerId", owner.getId())
                 .build();
 
         var encoded = encoder.encode(JwtEncoderParameters.from(claims));

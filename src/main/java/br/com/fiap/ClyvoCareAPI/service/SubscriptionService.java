@@ -1,6 +1,7 @@
 package br.com.fiap.ClyvoCareAPI.service;
 
 import br.com.fiap.ClyvoCareAPI.dto.ChangePlanRequest;
+import br.com.fiap.ClyvoCareAPI.auth.OwnerAccessService;
 import br.com.fiap.ClyvoCareAPI.dto.ChangeStatusRequest;
 import br.com.fiap.ClyvoCareAPI.dto.SubscriptionRequest;
 import br.com.fiap.ClyvoCareAPI.dto.SubscriptionSimulationRequest;
@@ -26,10 +27,12 @@ public class SubscriptionService {
     private final PlanService planService;
     private final ContractPricingService contractPricingService;
     private final SubscriptionLifecycleService subscriptionLifecycleService;
+    private final OwnerAccessService ownerAccess;
 
     @Transactional(readOnly = true)
-    public Page<Subscription> findActiveSubscriptionsByOwnerEmail(String email, Pageable pageable) {
-        return subscriptionRepository.findByOwnerEmailAndStatus(email, SubscriptionStatus.ACTIVE, pageable);
+    public Page<Subscription> findMyActiveSubscriptions(Pageable pageable) {
+        return subscriptionRepository.search(ownerAccess.currentOwnerId(), null, null,
+                SubscriptionStatus.ACTIVE, null, pageable);
     }
 
     public Page<Subscription> searchSubscriptions(
@@ -40,17 +43,19 @@ public class SubscriptionService {
             Pageable pageable
     ) {
         return subscriptionRepository.search(
-                petId, planId, status, paymentMethod, pageable
+                ownerAccess.restrictOwnerId(null), petId, planId, status, paymentMethod, pageable
         );
     }
 
     public Subscription findSubscriptionById(Long id) {
-        return subscriptionRepository.findById(id).orElseThrow(
+        Subscription subscription = subscriptionRepository.findById(id).orElseThrow(
                 () -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         String.format("Subscription with ID %d not found", id)
                 )
         );
+        ownerAccess.restrictOwnerId(subscription.getPet().getOwner().getId());
+        return subscription;
     }
 
     @Transactional(readOnly = true)
@@ -108,6 +113,9 @@ public class SubscriptionService {
     @Transactional
     public Subscription changeStatus(Long id, ChangeStatusRequest request) {
         Subscription existing = findSubscriptionByIdForUpdate(id);
+        if (!ownerAccess.isAdmin() && request.status() != SubscriptionStatus.INACTIVE) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Owners may only cancel their subscriptions");
+        }
         subscriptionLifecycleService.validateTransition(existing.getStatus(), request.status());
 
         if (request.status() == SubscriptionStatus.ACTIVE) {
@@ -134,12 +142,14 @@ public class SubscriptionService {
     }
 
     private Subscription findSubscriptionByIdForUpdate(Long id) {
-        return subscriptionRepository.findByIdForUpdate(id).orElseThrow(
+        Subscription subscription = subscriptionRepository.findByIdForUpdate(id).orElseThrow(
                 () -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         String.format("Subscription with ID %d not found", id)
                 )
         );
+        ownerAccess.restrictOwnerId(subscription.getPet().getOwner().getId());
+        return subscription;
     }
 
     private void applyPlanAndPayment(Subscription subscription, Plan plan, PaymentMethod paymentMethod) {

@@ -209,14 +209,19 @@ Use `GET /auth/me` para consultar os dados do usuário autenticado. O cadastro p
 
 | Recurso | Consulta | Criação | Edição e exclusão |
 |---|---|---|---|
-| Responsáveis | `ADMIN` | Pública | `ADMIN` |
-| Pets | Usuário autenticado | `ADMIN` ou `OWNER` | `ADMIN` ou `OWNER` |
-| Contratações | Usuário autenticado | `ADMIN` ou `OWNER` | `ADMIN` |
-| Estados, cidades, espécies, raças e planos | Usuário autenticado | `ADMIN` | `ADMIN` |
+| Responsáveis | `ADMIN` lista todos; `OWNER` consulta o próprio perfil | Pública | `ADMIN` ou o próprio `OWNER`; exclusão desativa a conta |
+| Pets | `ADMIN` ou o próprio `OWNER` | `ADMIN` ou `OWNER`, respeitando o tutor | `ADMIN` ou o próprio `OWNER` |
+| Contratações | `ADMIN` ou o próprio `OWNER` | `ADMIN` ou `OWNER`, respeitando o pet | `ADMIN`; `OWNER` pode cancelar a própria contratação |
+| Estados e cidades | Pública | `ADMIN` | `ADMIN` |
+| Espécies, raças e planos | Usuário autenticado | `ADMIN` | `ADMIN` |
 
-A simulação aceita `ADMIN` e `OWNER`. Mudança de status e troca de plano exigem `ADMIN`. O Swagger e o login são públicos; as demais consultas exigem token.
+A simulação aceita `ADMIN` e `OWNER`. O tutor pode mudar apenas a própria contratação para `INACTIVE`; as demais mudanças de status e a troca de plano exigem `ADMIN`. O Swagger, o login, o cadastro de tutor e as leituras de estados/cidades são públicos.
 
-A consulta `GET /contratacoes/minhas` filtra pelo usuário do JWT e retorna somente seus planos ativos. Nas rotas gerais de pets e contratações, a implementação atual não restringe os registros ao dono do token: o filtro usado nas telas de tutor não substitui essa validação no backend.
+A consulta `GET /contratacoes/minhas` retorna somente os planos ativos da conta autenticada. As listagens gerais de pets e contratações também restringem os dados ao tutor; `ADMIN` mantém acesso administrativo. Indicar outro tutor em uma operação de proprietário retorna `403`, sem alterar os registros.
+
+O token inclui `ownerId`, e-mail, perfil, emissor e expiração. A API verifica a assinatura e confere a conta habilitada em cada requisição autenticada, inclusive de `ADMIN`. Tokens antigos sem `ownerId` exigem novo login. Alterar o e-mail ou desativar a conta invalida o uso do token atual. Alterar apenas a senha não revoga os tokens já emitidos antes de expirarem.
+
+`DELETE /responsaveis/{id}` desativa a conta com `204`, preservando pets, contratações e histórico. O tutor só pode desativar a própria conta; `ADMIN` pode desativar outras. O aplicativo deve encerrar a sessão após a confirmação. Não há reativação pelo endpoint público de cadastro.
 
 ## Fluxos de contratação
 
@@ -396,7 +401,7 @@ Esses exemplos usam Bash. No PowerShell, use `curl.exe` e escreva cada comando e
 
 ### Testes disponíveis
 
-Os testes em `ClyvoCareApiApplicationTests` verificam a inicialização do contexto com H2 em memória e a assinatura/verificação de JWT usando um par RSA temporário. A configuração de testes desabilita Flyway e a carga de demonstração; não usa o Oracle nem as chaves locais da aplicação. Ainda não há uma suíte de testes das regras de contratação. Esses testes não validam migrations ou particularidades do Oracle.
+Os testes verificam a inicialização do contexto, assinatura/verificação de JWT, permissões de dois tutores e administrador, isolamento de pets e contratações, edição de perfil, cancelamento e desativação de conta. Também conferem os descontos da simulação e a recusa de contratação ativa duplicada. A configuração compartilhada usa H2 em memória e um par RSA temporário, com Flyway e carga de demonstração desabilitados; não usa o Oracle nem as chaves locais da aplicação. Esses testes não validam migrations, concorrência real ou particularidades do Oracle.
 
 Para executá-lo, use `./mvnw test` ou `.\mvnw.cmd test`.
 
