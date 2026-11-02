@@ -25,7 +25,7 @@ Para conhecer a versão mobile e sua apresentação visual, acesse o repositóri
 
 ## Como executar
 
-Você pode rodar a API na sua máquina usando o Oracle da FIAP ou publicar a API e um Oracle próprio na Azure. Para desenvolver localmente, siga os passos abaixo. Para preparar o ambiente de DevOps da Sprint 3, siga [Deploy no Azure ACR + ACI](#deploy-no-azure-acr--aci).
+Você pode rodar a API na sua máquina usando o Oracle da FIAP. Para desenvolver localmente, siga os passos abaixo. A preparação da publicação nativa na Azure está em [Inicialização no Azure App Service](#inicialização-no-azure-app-service). O fluxo anterior de ACR + ACI permanece documentado na seção de deploy da Sprint 3.
 
 Para rodar a API na sua máquina, você precisa de:
 
@@ -33,7 +33,7 @@ Para rodar a API na sua máquina, você precisa de:
 - **Acesso a um banco Oracle**, com usuário e senha. Você pode usar o Oracle da FIAP com as credenciais da sua conta.
 - **Git**, para clonar o repositório.
 
-O Maven Wrapper já está incluído. Você não precisa instalar o Maven separadamente. Docker e Azure CLI só são necessários para o deploy descrito mais abaixo.
+O Maven Wrapper já está incluído. Você não precisa instalar o Maven separadamente. Docker não é necessário para executar a API localmente nem para a publicação nativa no App Service.
 
 ### Configurando a conexão
 
@@ -238,7 +238,7 @@ Para gerar em outro diretório, passe o destino como primeiro argumento, por exe
 
 Não sobrescreva um par em uso sem atualizar os serviços que o utilizam. O par anteriormente versionado permanece no histórico do Git e deve ser substituído antes de publicar o ambiente; remover os arquivos da revisão atual não revoga tokens. A troca de par exige novo login dos usuários.
 
-No script Azure, `JWT_PRIVATE_KEY_FILE` e `JWT_PUBLIC_KEY_FILE` indicam os arquivos locais a montar no container. O padrão é o mesmo diretório `.keys`. O manifesto gerado contém segredos em Base64, fica com permissões restritas e não deve ser compartilhado ou versionado.
+No script antigo de ACR + ACI, `JWT_PRIVATE_KEY_FILE` e `JWT_PUBLIC_KEY_FILE` indicam os arquivos locais a montar no container. O padrão é o mesmo diretório `.keys`. O manifesto gerado contém segredos em Base64, fica com permissões restritas e não deve ser compartilhado ou versionado. Para App Service, use as configurações descritas na seção de inicialização abaixo.
 
 Use `GET /auth/me` para consultar os dados do usuário autenticado. O cadastro público em `POST /responsaveis` cria contas com perfil `OWNER`.
 
@@ -446,13 +446,49 @@ Para executar a suíte, use `./mvnw test` ou `.\mvnw.cmd test`.
 
 O gerador RSA tem uma verificação separada: `bash scripts/generate-keys.test.sh`. Ela cria um par temporário, confere sua correspondência e verifica a recusa de sobrescrita, sem modificar as chaves locais da aplicação.
 
+A inicialização do App Service pode ser verificada com `bash scripts/start-appservice.test.sh`. O teste usa chaves temporárias e simula o executável Java para conferir configurações obrigatórias, Base64 inválido, PEM inválido, pares diferentes, reinicialização com o mesmo par e propagação de falha do processo. No Linux, também verifica as permissões dos arquivos. Ele não acessa o Oracle nem provisiona recursos Azure.
+
+A suíte Java também verifica que a documentação da API apresenta o endereço HTTPS público quando o perfil `appservice` recebe os cabeçalhos encaminhados pelo proxy.
+
 O script `azure-acr-aci-test.sh` faz verificações HTTP de documentação, login, consultas e cadastro de tutor e pet. Ele cria dados no ambiente informado. Você pode passar a URL explicitamente:
 
 ```bash
 bash azure-acr-aci-test.sh http://SEU_FQDN:8080
 ```
 
+## Inicialização no Azure App Service
+
+O script [scripts/start-appservice.sh](scripts/start-appservice.sh) prepara a execução nativa da API em **App Service Linux com Java SE 17**, sem publicar uma imagem Docker própria. Esta etapa prepara a inicialização; o provisionamento dos recursos e as pipelines ainda serão adicionados. O ambiente publicado ainda precisa ser validado na Azure.
+
+O pacote de publicação deve conter o JAR executável como `app.jar` e o script em `scripts/start-appservice.sh`. O comando de inicialização do Web App será:
+
+```bash
+bash /home/site/wwwroot/scripts/start-appservice.sh
+```
+
+Configure as seguintes variáveis nas **configurações de aplicativo** do Web App:
+
+| Variável | Valor |
+|---|---|
+| `SPRING_DATASOURCE_URL` | URL JDBC do Oracle compartilhado com a .NET, por exemplo `jdbc:oracle:thin:@oracle.fiap.com.br:1521:ORCL` |
+| `SPRING_DATASOURCE_USERNAME` | Usuário do schema Oracle |
+| `SPRING_DATASOURCE_PASSWORD` | Senha do schema Oracle |
+| `JWT_PRIVATE_KEY_BASE64` | Conteúdo completo do PEM privado codificado em Base64, em uma linha |
+| `JWT_PUBLIC_KEY_BASE64` | Conteúdo completo do PEM público correspondente codificado em Base64, em uma linha |
+| `CORS_ALLOWED_ORIGINS` | Origens HTTPS das interfaces web, separadas por vírgula |
+| `JAVA_OPTS` | Opções da JVM, por exemplo `-Xms256m -Xmx768m` para limitar o heap no plano compartilhado |
+
+Gere um par RSA próprio para o deploy uma única vez com `scripts/generate-keys.sh`, em um diretório protegido fora do pacote. Mantenha o mesmo par entre publicações e reinicializações e forneça somente a pública correspondente à .NET. Os dois valores Base64 devem ser tratados como segredos: Base64 não é criptografia. Não coloque PEMs, senhas ou arquivos de configuração com segredos no Git, nos artefatos ou nos logs. Não use parâmetros da JVM para transportar credenciais.
+
+O script recusa iniciar sem a conexão explícita e os dois PEMs válidos do mesmo par RSA. Ele grava as chaves em um diretório temporário privado, exporta os caminhos esperados pela aplicação e remove os valores Base64 do ambiente do processo Java. Uma falha na preparação remove os arquivos criados; após iniciar a JVM, os PEMs permanecem no diretório temporário da instância. Não há geração automática de novas chaves a cada início.
+
+O perfil `appservice` desabilita a carga de demonstração, usa a porta fornecida pela plataforma (`SERVER_PORT`, ou `PORT`, com padrão `8080`) e interpreta os cabeçalhos encaminhados pelo proxy HTTPS. O Flyway continua habilitado e o Hibernate continua em `validate`; não use `create` ou `update` no schema compartilhado. As opções de `JAVA_OPTS` são encaminhadas ao interpretador de opções da JVM por `JDK_JAVA_OPTIONS`, preservando opções já presentes e sem executar comandos de shell. O JAR usa `AZURE_JAVA_APP_PATH` quando fornecido pela plataforma, ou `/home/site/wwwroot/app.jar`.
+
+Referências: [configuração Java no App Service](https://learn.microsoft.com/en-us/azure/app-service/configure-language-java-deploy-run) e [variáveis da plataforma](https://learn.microsoft.com/en-us/azure/app-service/reference-app-settings).
+
 ## Deploy no Azure ACR + ACI
+
+**Fluxo anterior da Sprint 3.** Não use este provisionamento para o novo ambiente App Service. Ele será substituído quando o provisionamento completo da nova arquitetura estiver disponível e validado.
 
 Este é o fluxo usado para a entrega de **DevOps Tools & Cloud Computing da Sprint 3**, na opção **ACR + ACI**: a aplicação e o banco rodam em containers na nuvem. O script [azure-acr-aci-setup.sh](azure-acr-aci-setup.sh) cria os recursos via Azure CLI, publica a imagem da API no Azure Container Registry e sobe um grupo no Azure Container Instances com dois containers: a API e um Oracle XE 21.
 
@@ -656,6 +692,7 @@ Outros arquivos úteis:
 | [docs/clyvo-care-api.yaml](docs/clyvo-care-api.yaml) | Coleção Insomnia |
 | [docs/MER.png](docs/MER.png) | Diagrama do banco |
 | [script_bd.sql](script_bd.sql) | Script completo da entrega de Database |
+| [scripts/start-appservice.sh](scripts/start-appservice.sh) | Inicialização nativa da Java no App Service |
 | [azure-acr-aci-setup.sh](azure-acr-aci-setup.sh) | Provisionamento ACR + ACI |
 | [azure-acr-aci-test.sh](azure-acr-aci-test.sh) | Verificações HTTP no ambiente informado |
 | [azure-cleanup.sh](azure-cleanup.sh) | Exclusão dos recursos Azure |
