@@ -120,11 +120,12 @@ public class SubscriptionController {
     }
 
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Altera o status conforme as transições permitidas")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Status atualizado"),
             @ApiResponse(responseCode = "400", description = "Erro de validação"),
+            @ApiResponse(responseCode = "403", description = "Alteração de status exclusiva de administrador"),
             @ApiResponse(responseCode = "404", description = "Contratação não encontrada"),
             @ApiResponse(responseCode = "409", description = "Transição inválida ou pet já possui outra contratação ativa")
     })

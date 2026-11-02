@@ -167,7 +167,7 @@ class OwnerSecurityTests extends ApiIntegrationTest {
     }
 
     @Test
-    void ownersCanCancelButCannotReactivateOrChangePlan() throws Exception {
+    void ownersCannotCancelOrManageSubscriptionStatus() throws Exception {
         String path = "/contratacoes/" + firstSubscription.getId();
         String token = bearer(first);
         mvc.perform(patch(path + "/status").header("Authorization", token)
@@ -178,13 +178,24 @@ class OwnerSecurityTests extends ApiIntegrationTest {
                 .andExpect(status().isForbidden());
         mvc.perform(patch(path + "/status").header("Authorization", token)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"INACTIVE\"}"))
+                .andExpect(status().isForbidden());
+        em.flush();
+        em.clear();
+        assertEquals(SubscriptionStatus.ACTIVE, em.find(Subscription.class, firstSubscription.getId()).getStatus());
+        mvc.perform(patch(path + "/status").header("Authorization", token)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"ACTIVE\"}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void administratorsCanCancelAnotherOwnersSubscription() throws Exception {
+        mvc.perform(patch("/contratacoes/" + firstSubscription.getId() + "/status")
+                .header("Authorization", bearer(admin))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"INACTIVE\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("INACTIVE"));
         em.flush();
         em.clear();
         assertEquals(SubscriptionStatus.INACTIVE, em.find(Subscription.class, firstSubscription.getId()).getStatus());
-        mvc.perform(patch(path + "/status").header("Authorization", token)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"ACTIVE\"}"))
-                .andExpect(status().isForbidden());
     }
 
     @Test

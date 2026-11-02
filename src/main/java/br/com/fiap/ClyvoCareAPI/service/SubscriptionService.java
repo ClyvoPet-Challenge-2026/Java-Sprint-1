@@ -112,10 +112,10 @@ public class SubscriptionService {
 
     @Transactional
     public Subscription changeStatus(Long id, ChangeStatusRequest request) {
-        Subscription existing = findSubscriptionByIdForUpdate(id);
-        if (!ownerAccess.isAdmin() && request.status() != SubscriptionStatus.INACTIVE) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Owners may only cancel their subscriptions");
+        if (!ownerAccess.isAdmin()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only administrators may change subscription status");
         }
+        Subscription existing = findSubscriptionByIdForUpdate(id);
         subscriptionLifecycleService.validateTransition(existing.getStatus(), request.status());
 
         if (request.status() == SubscriptionStatus.ACTIVE) {

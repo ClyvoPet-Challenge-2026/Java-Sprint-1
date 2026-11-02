@@ -19,9 +19,21 @@ O ClyvoCare está dividido em repositórios que atendem a partes diferentes da s
 
 As APIs Java e .NET trabalham com partes complementares do domínio. A Java mantém os estados e as cidades; a .NET consulta essas tabelas pelo Entity Framework e vincula as clínicas às cidades existentes. Para compartilhar esses dados, configure as duas APIs para usar o mesmo schema Oracle.
 
-Na versão atual da .NET, estão implementados o CRUD de clínicas e as consultas de estados e cidades. Eventos clínicos e lembretes fazem parte do escopo previsto para essa API, mas ainda não têm endpoints implementados.
+Na versão atual da .NET, estão implementados o CRUD de clínicas, as consultas de estados e cidades e a criação e consulta de agendamentos com isolamento por tutor. A auditoria de alterações em clínicas usa MongoDB Atlas. Lembretes ainda não têm endpoints implementados.
 
 Para conhecer a versão mobile e sua apresentação visual, acesse o repositório **Clyvo-Care**. As instruções de frontend deste README são para o **ClyvoCare Web**, a interface de apoio à entrega de Java Advanced. As duas interfaces correspondem a entregas distintas: frontend em Java Advanced e aplicativo em Mobile Application Development, conforme o enunciado da Sprint 3.
+
+## API publicada na Azure
+
+| Endereço | Uso |
+|---|---|
+| [Swagger](https://clyvocare-java-rm561584.azurewebsites.net/swagger-ui/index.html) | Documentação e execução das operações |
+| [Contrato OpenAPI](https://clyvocare-java-rm561584.azurewebsites.net/v3/api-docs) | Contrato HTTP em JSON |
+| [Estados](https://clyvocare-java-rm561584.azurewebsites.net/estados) | Consulta pública no Oracle FIAP |
+
+A Java usa Oracle FIAP remoto e emite os JWTs aceitos também pela API .NET. O deploy é nativo em um Web App Linux Java 17, no grupo `rm561584`, compartilhando um plano B2 com a .NET. O MongoDB Atlas pertence ao contexto de auditoria/importação da .NET; a Java não precisa de uma conexão MongoDB.
+
+A pipeline [clyvocare-java](https://dev.azure.com/RM561584/Sprint%204%20%E2%80%93%20Azure%20DevOps/_build?definitionId=1) publica automaticamente após build, testes e geração do artefato na `master`. A execução [6](https://dev.azure.com/RM561584/Sprint%204%20%E2%80%93%20Azure%20DevOps/_build/results?buildId=6) concluiu CI e CD com sucesso. Na validação integrada de 02/11/2026, foram confirmados login, uso do JWT na .NET, contratações e relatórios com os packages Oracle. Consulte a execução mais recente para conferir o estado atual do deploy.
 
 ## Como executar
 
@@ -40,7 +52,7 @@ O Maven Wrapper já está incluído. Você não precisa instalar o Maven separad
 Clone o projeto e entre na pasta:
 
 ```bash
-git clone https://github.com/ClyvoPet-Challenge-2026/Java-Sprint-1.git
+git clone --branch master https://github.com/ClyvoPet-Challenge-2026/Java-Sprint-1.git
 cd Java-Sprint-1
 ```
 
@@ -246,11 +258,11 @@ Use `GET /auth/me` para consultar os dados do usuário autenticado. O cadastro p
 |---|---|---|---|
 | Responsáveis | `ADMIN` lista todos; `OWNER` consulta o próprio perfil | Pública | `ADMIN` ou o próprio `OWNER`; exclusão desativa a conta |
 | Pets | `ADMIN` ou o próprio `OWNER` | `ADMIN` ou `OWNER`, respeitando o tutor | `ADMIN` ou o próprio `OWNER` |
-| Contratações | `ADMIN` ou o próprio `OWNER` | `ADMIN` ou `OWNER`, respeitando o pet | `ADMIN`; `OWNER` pode cancelar a própria contratação |
+| Contratações | `ADMIN` ou o próprio `OWNER` | `ADMIN` ou `OWNER`, respeitando o pet | Somente `ADMIN`, incluindo cancelamento e alterações de status |
 | Estados e cidades | Pública | `ADMIN` | `ADMIN` |
 | Espécies, raças e planos | Usuário autenticado | `ADMIN` | `ADMIN` |
 
-A simulação aceita `ADMIN` e `OWNER`. O tutor pode mudar apenas a própria contratação para `INACTIVE`; as demais mudanças de status e a troca de plano exigem `ADMIN`. O Swagger, o login, o cadastro de tutor e as leituras de estados/cidades são públicos.
+A simulação aceita `ADMIN` e `OWNER`. Cancelar uma contratação, alterar seu status ou trocar o plano exige `ADMIN`. Um tutor `OWNER` recebe `403` ao tentar cancelar, inclusive quando a contratação é sua; o registro permanece inalterado. O Swagger, o login, o cadastro de tutor e as leituras de estados/cidades são públicos.
 
 A consulta `GET /contratacoes/minhas` retorna somente os planos ativos da conta autenticada. As listagens gerais de pets e contratações também restringem os dados ao tutor; `ADMIN` mantém acesso administrativo. Indicar outro tutor em uma operação de proprietário retorna `403`, sem alterar os registros.
 
@@ -452,7 +464,7 @@ A suíte Java também verifica que a documentação da API apresenta o endereço
 
 ## Inicialização no Azure App Service
 
-O script [scripts/start-appservice.sh](scripts/start-appservice.sh) prepara a execução nativa da API em **App Service Linux com Java SE 17**, sem publicar uma imagem Docker própria. O provisionamento compartilhado e a pipeline estão descritos abaixo. A execução completa ainda precisa ser validada na Azure e no Azure DevOps.
+O script [scripts/start-appservice.sh](scripts/start-appservice.sh) prepara a execução nativa da API em **App Service Linux com Java SE 17**, sem publicar uma imagem Docker própria. O provisionamento compartilhado e a pipeline estão descritos abaixo. O ambiente RM561584 já foi provisionado e validado; siga essas instruções para reproduzir a instalação em outro ambiente.
 
 O pacote de publicação deve conter o JAR executável como `app.jar` e o script em `scripts/start-appservice.sh`. O comando de inicialização do Web App será:
 
@@ -515,7 +527,7 @@ read -r -s -p 'URI MongoDB Atlas: ' Mongo__ConnectionString; printf '\n'
 export Mongo__ConnectionString
 ```
 
-A connection string .NET deve usar o **mesmo banco, usuário/schema e senha** da configuração Java, no formato `Data Source=oracle.fiap.com.br:1521/ORCL;User Id=SEU_RM;Password=SUA_SENHA;`. Para interfaces web, configure também `CORS_ALLOWED_ORIGINS` com as origens HTTPS separadas por vírgula, sem caminhos ou barra final. Sem essa variável, o provisionamento não habilita origens web; o aplicativo mobile nativo não depende de CORS.
+A connection string .NET deve usar o **mesmo banco, usuário/schema e senha** da configuração Java. Para o App Service, use o descriptor com keepalive documentado no [README da .NET](https://github.com/ClyvoPet-Challenge-2026/.Net-Sprint-1/blob/master/README.md#api-publicada-na-azure), preservando `EXPIRE_TIME=1` e os limites de abertura de conexão. Para interfaces web, configure também `CORS_ALLOWED_ORIGINS` com as origens HTTPS separadas por vírgula, sem caminhos ou barra final. Sem essa variável, o provisionamento não habilita origens web; o aplicativo mobile nativo não depende de CORS.
 
 Depois de revisar as configurações e autorizar o custo, execute:
 
@@ -543,7 +555,7 @@ Antes de executar a pipeline:
 4. Crie uma conexão de serviço **Azure Resource Manager** chamada `clyvocare-azure`, preferencialmente com identidade federada, limitada ao grupo dedicado, e autorize esta pipeline. Se usar outro nome, ajuste `azureServiceConnection` no YAML.
 5. Conecte a pipeline ao repositório GitHub e selecione `/azure-pipelines.yml`. O YAML já define `azureResourceGroup: rm561584`; configure a variável não secreta `javaWebAppName` com o nome do Web App provisionado. Para outro ambiente, ajuste o grupo no YAML. Credenciais de Oracle, Atlas e RSA pertencem às configurações protegidas dos Web Apps; o CI não precisa delas. Se usar Azure DevOps para provisionar, mantenha esses valores como variáveis secretas/Secure Files e não como texto no YAML.
 
-A .NET tem sua própria pipeline no repositório correspondente, apontando para o mesmo grupo e o seu Web App. O template compartilhado não cria o projeto DevOps, a conexão de serviço, a concessão do agente ou os acessos do professor. A aprovação de permissões e os testes reais de CI/CD ainda precisam ser concluídos; a presença dos arquivos não comprova a entrega.
+A .NET tem sua própria pipeline no repositório correspondente, apontando para o mesmo grupo e o seu Web App. O template compartilhado não cria o projeto DevOps, a conexão de serviço, a concessão do agente ou os acessos do professor. No ambiente RM561584, o projeto, as conexões e as duas pipelines já foram configurados, com CI/CD automático aprovado. Em outra instalação, confira novamente as permissões e execute o fluxo completo; a presença dos arquivos não comprova a entrega.
 
 Para verificar os parâmetros e o fluxo do provisionamento sem criar recursos:
 
