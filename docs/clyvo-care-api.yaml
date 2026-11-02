@@ -9,10 +9,10 @@ meta:
     Collection de testes da API ClyvoCare (Java / Spring Boot).
 
     COMO USAR
-    1. Selecione o environment: "Base Environment" (localhost) ou "Azure ACI".
-       No "Azure ACI", troque base_url pelo FQDN do container:
-       http://<FQDN>.mexicocentral.azurecontainer.io:8080
-       (pegue com: az container show -g <RG> -n aci-clyvocare-group --query ipAddress.fqdn -o tsv)
+    1. Selecione o environment: "Base Environment" (localhost) ou "Azure App Service".
+       No "Azure App Service", troque base_url pela URL HTTPS retornada
+       no provisionamento, sem barra final:
+       https://<HOSTNAME>.azurewebsites.net
     2. Rode "00 - Autenticacao > Login". Ele guarda o token em access_token
        automaticamente; todas as rotas protegidas ja usam esse token.
     3. Rode as pastas na ordem 01 -> 05. As requests de cadastro (Responsavel,
@@ -587,15 +587,15 @@ environments:
     pet_id: "1"
     subscription_id: "1"
   subEnvironments:
-    - name: Azure ACI
+    - name: Azure App Service
       meta:
-        id: env_azure_aci
+        id: env_azure_appservice
         created: 1789000000000
         modified: 1789000000000
         isPrivate: false
         sortKey: 0
       data:
-        base_url: http://SUBSTITUA-PELO-FQDN.mexicocentral.azurecontainer.io:8080
+        base_url: https://SUBSTITUA-PELO-HOSTNAME.azurewebsites.net
         access_token: ""
         owner_id: "1"
         pet_id: "1"

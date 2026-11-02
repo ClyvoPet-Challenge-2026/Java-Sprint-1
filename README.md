@@ -25,7 +25,7 @@ Para conhecer a versão mobile e sua apresentação visual, acesse o repositóri
 
 ## Como executar
 
-Você pode rodar a API na sua máquina usando o Oracle da FIAP. Para desenvolver localmente, siga os passos abaixo. A preparação da publicação nativa na Azure está em [Inicialização no Azure App Service](#inicialização-no-azure-app-service). O fluxo anterior de ACR + ACI permanece documentado na seção de deploy da Sprint 3.
+Você pode rodar a API na sua máquina usando o Oracle da FIAP. Para desenvolver localmente, siga os passos abaixo. A publicação nativa na Azure segue [Inicialização no Azure App Service](#inicialização-no-azure-app-service), com provisionamento compartilhado e pipelines CI/CD.
 
 Para rodar a API na sua máquina, você precisa de:
 
@@ -154,7 +154,7 @@ Nos registros existentes, a migration preserva os cadastros e preços. Para as c
 - Ajusta Ana para `ADMIN` e Carlos para `OWNER`.
 - Preserva outras senhas e a situação de habilitação das contas existentes.
 
-O `DataInitializer` fica como alternativa para ambientes com Flyway explicitamente desabilitado, como o script ACI atual. A propriedade `app.seed.enabled=false` desativa essa alternativa Java; ela não desativa a V3.
+O `DataInitializer` fica como alternativa para ambientes com Flyway explicitamente desabilitado. A propriedade `app.seed.enabled=false` desativa essa alternativa Java; ela não desativa a V3. O deploy App Service mantém o Flyway habilitado e desativa essa carga alternativa.
 
 ### Script SQL e objetos de banco
 
@@ -202,7 +202,7 @@ curl -H "Authorization: Bearer $ADMIN_TOKEN" 'http://localhost:8080/relatorios/r
 
 Sem registros correspondentes, as procedures sinalizam os códigos Oracle `20031` ou `20041`, e a API responde `200` com lista vazia e total zero. Parâmetros inválidos retornam `400`, visitante recebe `401` e tutor recebe `403`. Falha de execução, package indisponível ou JSON inválido retornam `503` com mensagem genérica; registros de erro embutidos no JSON não são apresentados como sucesso.
 
-Antes de demonstrar, confira as versões 4 e 5 em `flyway_schema_history` e os packages/trigger em `USER_OBJECTS` e `USER_ERRORS`. O Flyway aplica as migrations na inicialização normal; os scripts destrutivos de demonstração não são necessários para essa atualização. O deploy ACI descrito abaixo ainda desabilita Flyway e precisa ser ajustado antes de usar esses relatórios.
+Antes de demonstrar, confira as versões 4 e 5 em `flyway_schema_history` e os packages/trigger em `USER_OBJECTS` e `USER_ERRORS`. O Flyway aplica as migrations na inicialização normal e no App Service; os scripts destrutivos de demonstração não são necessários para essa atualização.
 
 ## Autenticação e permissões
 
@@ -238,7 +238,7 @@ Para gerar em outro diretório, passe o destino como primeiro argumento, por exe
 
 Não sobrescreva um par em uso sem atualizar os serviços que o utilizam. O par anteriormente versionado permanece no histórico do Git e deve ser substituído antes de publicar o ambiente; remover os arquivos da revisão atual não revoga tokens. A troca de par exige novo login dos usuários.
 
-No script antigo de ACR + ACI, `JWT_PRIVATE_KEY_FILE` e `JWT_PUBLIC_KEY_FILE` indicam os arquivos locais a montar no container. O padrão é o mesmo diretório `.keys`. O manifesto gerado contém segredos em Base64, fica com permissões restritas e não deve ser compartilhado ou versionado. Para App Service, use as configurações descritas na seção de inicialização abaixo.
+Para App Service, configure os PEMs em Base64 conforme a seção de inicialização abaixo. O provisionamento entrega privada e pública à Java e somente a mesma pública à .NET, sem incluir chaves nos artefatos.
 
 Use `GET /auth/me` para consultar os dados do usuário autenticado. O cadastro público em `POST /responsaveis` cria contas com perfil `OWNER`.
 
@@ -413,7 +413,7 @@ As respostas paginadas trazem os registros em `content` e informações como `to
 
 O Swagger permite consultar o contrato e enviar requisições. Use o botão **Authorize** para informar o JWT retornado pelo login, sem o prefixo `Bearer`. Para os relatórios, faça login com uma conta `ADMIN`. Você também pode usar Insomnia ou curl.
 
-A coleção [docs/clyvo-care-api.yaml](docs/clyvo-care-api.yaml) tem os ambientes **Base Environment**, para localhost, e **Azure ACI**. Ajuste `base_url` para o endereço da API e execute o login da pasta `00 - Autenticacao`. O script da requisição salva o JWT em `access_token`.
+A coleção [docs/clyvo-care-api.yaml](docs/clyvo-care-api.yaml) tem os ambientes **Base Environment**, para localhost, e **Azure App Service**. Ajuste `base_url` para a URL HTTPS retornada pelo provisionamento e execute o login da pasta `00 - Autenticacao`. O script da requisição salva o JWT em `access_token`.
 
 As pastas seguintes agrupam consultas, cadastros, simulação, contratação e mudanças de status. Os cadastros de responsável, pet e contratação guardam os IDs retornados para as próximas requisições. Alguns exemplos de catálogo usam IDs fixos; confira se existem no seu banco antes de executá-los.
 
@@ -449,12 +449,6 @@ O gerador RSA tem uma verificação separada: `bash scripts/generate-keys.test.s
 A inicialização do App Service pode ser verificada com `bash scripts/start-appservice.test.sh`. O teste usa chaves temporárias e simula o executável Java para conferir configurações obrigatórias, Base64 inválido, PEM inválido, pares diferentes, reinicialização com o mesmo par e propagação de falha do processo. No Linux, também verifica as permissões dos arquivos. Ele não acessa o Oracle nem provisiona recursos Azure.
 
 A suíte Java também verifica que a documentação da API apresenta o endereço HTTPS público quando o perfil `appservice` recebe os cabeçalhos encaminhados pelo proxy.
-
-O script `azure-acr-aci-test.sh` faz verificações HTTP de documentação, login, consultas e cadastro de tutor e pet. Ele cria dados no ambiente informado. Você pode passar a URL explicitamente:
-
-```bash
-bash azure-acr-aci-test.sh http://SEU_FQDN:8080
-```
 
 ## Inicialização no Azure App Service
 
@@ -498,10 +492,10 @@ Na raiz do repositório Java, configure nomes exclusivos. Substitua os exemplos 
 
 ```bash
 export AZURE_SUBSCRIPTION_ID='ID_DA_ASSINATURA'
-export AZURE_RESOURCE_GROUP='rg-clyvocare-sprint4'
-export AZURE_PLAN_NAME='asp-clyvocare-sprint4'
-export JAVA_WEBAPP_NAME='clyvocare-java-seu-sufixo'
-export DOTNET_WEBAPP_NAME='clyvocare-dotnet-seu-sufixo'
+export AZURE_RESOURCE_GROUP='rm561584'
+export AZURE_PLAN_NAME='asp-clyvocare-rm561584'
+export JAVA_WEBAPP_NAME='clyvocare-java-rm561584'
+export DOTNET_WEBAPP_NAME='clyvocare-dotnet-rm561584'
 export AZURE_LOCATION='eastus'
 export SPRING_DATASOURCE_URL='jdbc:oracle:thin:@oracle.fiap.com.br:1521:ORCL'
 export SPRING_DATASOURCE_USERNAME='SEU_RM'
@@ -547,7 +541,7 @@ Antes de executar a pipeline:
 2. Crie o projeto privado **Sprint 4 – Azure DevOps**, Git e Scrum/Agile, com a descrição exigida pelo professor. Preserve o projeto antigo de organização das tarefas. Configure o acesso Basic do professor para a entrega.
 3. Confirme disponibilidade/minutos do agente Linux. O YAML usa `ubuntu-24.04`; a existência do pool Azure Pipelines não comprova concessão de execução gratuita. Não compre paralelismo automaticamente. Um agente próprio exige revisar o pool e instalar as ferramentas equivalentes.
 4. Crie uma conexão de serviço **Azure Resource Manager** chamada `clyvocare-azure`, preferencialmente com identidade federada, limitada ao grupo dedicado, e autorize esta pipeline. Se usar outro nome, ajuste `azureServiceConnection` no YAML.
-5. Conecte a pipeline ao repositório GitHub e selecione `/azure-pipelines.yml`. Configure as variáveis não secretas `azureResourceGroup` e `javaWebAppName` com os recursos provisionados. Credenciais de Oracle, Atlas e RSA pertencem às configurações protegidas dos Web Apps; o CI não precisa delas. Se usar Azure DevOps para provisionar, mantenha esses valores como variáveis secretas/Secure Files e não como texto no YAML.
+5. Conecte a pipeline ao repositório GitHub e selecione `/azure-pipelines.yml`. O YAML já define `azureResourceGroup: rm561584`; configure a variável não secreta `javaWebAppName` com o nome do Web App provisionado. Para outro ambiente, ajuste o grupo no YAML. Credenciais de Oracle, Atlas e RSA pertencem às configurações protegidas dos Web Apps; o CI não precisa delas. Se usar Azure DevOps para provisionar, mantenha esses valores como variáveis secretas/Secure Files e não como texto no YAML.
 
 A .NET tem sua própria pipeline no repositório correspondente, apontando para o mesmo grupo e o seu Web App. O template compartilhado não cria o projeto DevOps, a conexão de serviço, a concessão do agente ou os acessos do professor. A aprovação de permissões e os testes reais de CI/CD ainda precisam ser concluídos; a presença dos arquivos não comprova a entrega.
 
@@ -560,153 +554,20 @@ bash scripts/provision-appservice.test.sh
 
 Os testes usam credenciais/chaves temporárias e uma CLI simulada; conferem falhas antes de alterações, proteção de grupo alheio, reutilização do grupo próprio, limpeza dos segredos e falha da implantação. Não comprovam quota, preço, permissões ou aceitação do template pela Azure. Referências: [artefatos de pipelines](https://learn.microsoft.com/en-us/azure/devops/pipelines/artifacts/pipeline-artifacts), [deploy de ZIP](https://learn.microsoft.com/en-us/azure/app-service/deploy-zip) e [parâmetros seguros ARM](https://learn.microsoft.com/en-us/azure/azure-resource-manager/templates/parameters#secure-parameters).
 
-## Deploy no Azure ACR + ACI
-
-**Fluxo anterior da Sprint 3.** Não use este provisionamento para o novo ambiente App Service. Ele será substituído quando o provisionamento completo da nova arquitetura estiver disponível e validado.
-
-Este é o fluxo usado para a entrega de **DevOps Tools & Cloud Computing da Sprint 3**, na opção **ACR + ACI**: a aplicação e o banco rodam em containers na nuvem. O script [azure-acr-aci-setup.sh](azure-acr-aci-setup.sh) cria os recursos via Azure CLI, publica a imagem da API no Azure Container Registry e sobe um grupo no Azure Container Instances com dois containers: a API e um Oracle XE 21.
-
-Para executar esse fluxo, você precisa de:
-
-- **Azure CLI** instalada e uma **assinatura Azure ativa**.
-- **Docker Desktop aberto e usando containers Linux**, no Windows, ou Docker Engine em execução no Linux.
-- **Bash ou Git Bash**, com os comandos `az`, `docker` e `curl` disponíveis.
-- O repositório clonado na sua máquina, conforme [Configurando a conexão](#configurando-a-conexão).
-
-Abra o terminal na raiz do repositório, onde ficam o `Dockerfile` e o script. Confira se o Docker está respondendo e selecione a assinatura que vai receber os recursos:
-
-```bash
-docker info
-az login
-az account set --subscription "NOME_OU_ID_DA_ASSINATURA"
-az account show --query "{assinatura:name, id:id}" -o table
-```
-
-Se `docker info` falhar, aguarde o Docker Desktop terminar de iniciar antes de continuar. O build usa as imagens de Maven e Java definidas no Dockerfile; você não precisa gerar o JAR manualmente para esse deploy.
-
-Depois, execute:
-
-```bash
-bash azure-acr-aci-setup.sh
-```
-
-O script faz o seguinte:
-
-1. Confere o login no Azure e registra os provedores `Microsoft.ContainerRegistry` e `Microsoft.ContainerInstance`, quando necessário.
-2. Cria o **Resource Group** e um **ACR** na assinatura selecionada.
-3. Autentica o Docker no ACR, faz o **build da API na sua máquina** e envia a imagem com `docker push`.
-4. Gera o arquivo `aci-deployment.generated.yaml`, com as imagens, portas e variáveis de conexão.
-5. Cria o **grupo ACI**. A Azure baixa a imagem da API do ACR e a imagem `gvenzl/oracle-xe:21-slim` para iniciar o banco.
-6. Consulta o IP e o endereço público e aguarda a API responder em `/v3/api-docs`, com até 60 tentativas e intervalo de 10 segundos.
-
-O Docker Desktop participa do build e do envio da imagem. Depois do provisionamento, os containers da aplicação e do banco executam na Azure.
-
-### Nomes e configurações do ambiente
-
-O script usa estes valores por padrão:
-
-| Variável | Valor padrão | Uso |
-|---|---|---|
-| `RESOURCE_GROUP` | `rg-clyvocare-sprint3` | Grupo que reúne os recursos |
-| `LOCATION` | `mexicocentral` | Região de criação |
-| `CONTAINER_GROUP_NAME` | `aci-clyvocare-group` | Grupo com a API e o Oracle |
-| `ACR_NAME` | `acrclyvo` seguido de um sufixo aleatório | Nome do registro de imagens |
-| `DNS_LABEL` | `clyvocare-api-` seguido de um sufixo aleatório | Parte inicial do endereço público |
-
-Para personalizar os nomes, exporte as variáveis no mesmo terminal antes de executar o script. Use uma região disponível para sua assinatura. Você também pode definir `ORACLE_PWD`, `APP_DB_USER` e `APP_DB_PWD` para configurar as credenciais do Oracle desse ambiente.
-
-Esse processo inclui a inicialização de um Oracle próprio no ACI. As variáveis `SPRING_DATASOURCE_*` usadas na execução local com o banco da FIAP não são reaproveitadas pelo script: ele define a conexão do container com o Oracle do grupo. Para desenvolver, você pode continuar rodando a API localmente com o banco da FIAP, sem repetir todo o provisionamento a cada alteração.
-
-### Como o ambiente é organizado
-
-```mermaid
-flowchart LR
-    build["Build Docker local"] --> acr["ACR: imagem da API"]
-    acr --> api
-    client["Frontend / cliente HTTP"] -->|HTTP 8080| api
-    subgraph aci["Grupo ACI"]
-        api["Container Spring Boot"] -->|JDBC| oracle["Container Oracle XE 21"]
-    end
-```
-
-O grupo expõe as portas **8080** e **1521**. A API acessa o Oracle por `127.0.0.1:1521/XEPDB1`, dentro do mesmo grupo.
-
-O [Dockerfile](Dockerfile) usa duas etapas: Maven com JDK 23 para gerar o JAR e JRE 23 para executá-lo. O projeto compila para Java 17. O container da API roda como `appuser`, UID `10001`, e o build da imagem usa `-DskipTests`.
-
-### Diferenças em relação à execução local
-
-**O script ACI atual desabilita o Flyway.** Ele injeta estas variáveis no container da API:
-
-```yaml
-SPRING_FLYWAY_ENABLED: "false"
-SPRING_JPA_HIBERNATE_DDL_AUTO: "update"
-```
-
-Com isso, o Hibernate cria ou altera as tabelas, e o `DataInitializer` tenta carregar os dados de demonstração. As migrations V1 a V5, incluindo os objetos PL/SQL, não são executadas nesse deploy.
-
-O script também cria o usuário `clyvocare`, mas conecta a API como `system`, usando `ORACLE_PWD`. Ao consultar as tabelas para conferir dados criados pela API, considere esse schema; o usuário anunciado no resumo do script é `APP_DB_USER`.
-
-O banco não tem volume persistente configurado nesse manifesto. Trate os dados desse ambiente como temporários. A execução local com Flyway e a inicialização pelo script ACI seguem configurações diferentes; o deploy ainda precisa ser alinhado às migrations.
-
-### Endereço e logs
-
-Com os nomes padrão do script, você pode recuperar o endereço a qualquer momento:
-
-```bash
-az container show --resource-group rg-clyvocare-sprint3 --name aci-clyvocare-group --query ipAddress.fqdn -o tsv
-```
-
-Use `http://FQDN_RETORNADO:8080` como base da API. O Swagger fica em `/swagger-ui.html`. Se você alterar `RESOURCE_GROUP` ou `CONTAINER_GROUP_NAME`, use esses mesmos nomes nos comandos de consulta.
-
-Para acompanhar os logs da API:
-
-```bash
-az container logs --resource-group rg-clyvocare-sprint3 --name aci-clyvocare-group --container-name clyvocare-api --follow
-```
-
-Para os logs do banco, troque o nome do container por `oracle-db`. A resposta de `/v3/api-docs` confirma acesso à documentação, mas não substitui a verificação do login e dos fluxos com gravação no banco.
-
 ### Conferindo a entrega de DevOps
 
-Com a API respondendo no endereço público, execute as verificações HTTP:
+Use a API publicada por HTTPS e a coleção Insomnia para demonstrar o CRUD completo de **pets e contratações**, com pelo menos dois registros significativos em cada tabela. As duas tabelas fazem parte do negócio e estão relacionadas pelo pet da contratação. Exclua as contratações antes dos pets usados no teste.
 
-```bash
-bash azure-acr-aci-test.sh http://SEU_FQDN:8080
-```
-
-Esse script verifica documentação, login, consultas e cadastro de tutor e pet. Para demonstrar o CRUD completo exigido na Sprint 3, use também a coleção do Insomnia ou os endpoints descritos neste README para criar, consultar, editar e excluir **pets e contratações**. Essas duas tabelas fazem parte do negócio e estão relacionadas pelo pet da contratação. Prepare pelo menos dois registros significativos em cada uma e exclua as contratações antes dos pets usados no teste.
-
-Para conferir os dados diretamente no Oracle do ACI, abra uma conexão no SQL Developer ou em outro cliente Oracle:
-
-| Campo | Valor |
-|---|---|
-| Host | IP público ou FQDN retornado pelo script |
-| Porta | `1521` |
-| Tipo de conexão | Service name |
-| Serviço | `XEPDB1` |
-| Usuário | `system`, usado pela API no manifesto atual |
-| Senha | Valor de `ORACLE_PWD` usado no provisionamento |
-
-Consulte as tabelas após cada operação da API:
+Conecte o SQL Developer ao mesmo Oracle FIAP e schema configurados nas APIs. Após cada operação, confira os registros:
 
 ```sql
 SELECT * FROM TB_CAD_PET;
 SELECT * FROM TB_CAD_SUBSCRIPTION;
 ```
 
-O DDL comentado está em [script_bd.sql](script_bd.sql). Como explicado na seção de banco, esse arquivo também contém comandos de exclusão de tabelas; as consultas acima bastam para conferir a persistência durante a demonstração.
+O DDL comentado está em [script_bd.sql](script_bd.sql). Ele contém comandos de exclusão de tabelas e não deve ser executado para demonstrar essas consultas. Mostre no vídeo o provisionamento, uma alteração real no código na master, CI, resultados de testes, artefato, CD automático, recursos no portal e CRUD com `SELECT`, em resolução mínima de 720p e com narração. Confira os dados exigidos no PDF da respectiva sprint e o acesso do professor ao projeto e ao vídeo.
 
-No vídeo de DevOps, comece pelo clone do repositório, mostre a criação dos recursos pelo script e execute o CRUD usando a API publicada. Mostre os `SELECT` no banco sem cortes durante a comprovação das operações, com resolução mínima de 720p e explicação por voz. O PDF da entrega deve conter somente os nomes e RMs dos integrantes e os links do GitHub e do vídeo no YouTube.
-
-### Removendo os recursos
-
-Quando terminar de usar o ambiente, você pode solicitar sua exclusão:
-
-```bash
-bash azure-cleanup.sh
-```
-
-Esse script **apaga o grupo de recursos inteiro**, incluindo o ACR e os containers. Ele usa o grupo `rg-clyvocare-sprint3` por padrão ou o valor de `RESOURCE_GROUP`. A exclusão é iniciada em segundo plano, sem confirmação interativa.
+O encerramento do ambiente será feito somente após a correção, conferindo os recursos do grupo dedicado `rm561584`. Parar os Web Apps não encerra a cobrança do plano. Não existe exclusão automática no provisionamento ou nas pipelines.
 
 ## Tecnologias utilizadas
 
@@ -723,7 +584,9 @@ Esse script **apaga o grupo de recursos inteiro**, incluindo o ACR e os containe
 | SpringDoc OpenAPI 3.0.2 | Documentação Swagger |
 | Lombok | Geração de construtores, acessores e builders |
 | Maven | Dependências e compilação |
-| Docker, ACR e ACI | Empacotamento e deploy |
+| Azure App Service | Hospedagem nativa das APIs |
+| Azure CLI e ARM | Provisionamento do plano, Web Apps e configurações |
+| Azure DevOps e YAML | CI/CD, testes e artefatos |
 
 As versões e dependências estão em [pom.xml](pom.xml). Embora existam dependências de H2 no arquivo, a configuração de execução usa Oracle.
 
@@ -757,7 +620,7 @@ Estados e cidades têm cache nas consultas, invalidado nas alterações. As chav
 
 O `ValidationHandler` devolve erros de campos como uma lista de objetos `{field, message}`. Para `ResponseStatusException`, retorna `{status, message}`. Por isso, ao tratar erros no frontend, você precisa considerar os dois formatos.
 
-O modelo Oracle compartilhado mantém a referência entre as clínicas da API .NET e as cidades cadastradas pela API Java. O Oracle do ACI é uma instância própria, separada do banco da FIAP; as APIs só consultam os mesmos registros quando suas conexões apontam para o mesmo schema no mesmo banco.
+O modelo Oracle compartilhado mantém a referência entre as clínicas da API .NET e as cidades cadastradas pela API Java. As APIs publicadas no App Service acessam o mesmo schema no Oracle da FIAP, mantendo os registros compartilhados.
 
 Outros arquivos úteis:
 
@@ -767,10 +630,9 @@ Outros arquivos úteis:
 | [docs/MER.png](docs/MER.png) | Diagrama do banco |
 | [script_bd.sql](script_bd.sql) | Script completo da entrega de Database |
 | [scripts/start-appservice.sh](scripts/start-appservice.sh) | Inicialização nativa da Java no App Service |
-| [azure-acr-aci-setup.sh](azure-acr-aci-setup.sh) | Provisionamento ACR + ACI |
-| [azure-acr-aci-test.sh](azure-acr-aci-test.sh) | Verificações HTTP no ambiente informado |
-| [azure-cleanup.sh](azure-cleanup.sh) | Exclusão dos recursos Azure |
-| [azure-setup.sh](azure-setup.sh) | Script da Sprint 1, baseado em VM |
+| [scripts/provision-appservice.sh](scripts/provision-appservice.sh) | Provisionamento compartilhado por Azure CLI |
+| [infra/appservice.json](infra/appservice.json) | Plano B2, dois Web Apps e configurações protegidas |
+| [azure-pipelines.yml](azure-pipelines.yml) | CI/CD da API Java no Azure DevOps |
 
 ## Relação com a Sprint 3
 
@@ -780,9 +642,9 @@ Outros arquivos úteis:
 | Java Advanced — Flyway | Migrations V1 a V5 na execução normal |
 | Java Advanced — Spring Security | Perfis `ADMIN` e `OWNER`, JWT e permissões nos endpoints |
 | Java Advanced — fluxos de negócio | Simulação e contratação; mudança de status e troca de plano |
-| DevOps | Dockerfile e scripts de build, publicação, provisionamento e verificação no ACR + ACI |
+| DevOps | App Service, provisionamento por CLI e pipeline YAML com testes, artefato e CD |
 | Database | Modelagem, scripts SQL, funções, procedimentos e trigger |
 | .NET | [API complementar](https://github.com/ClyvoPet-Challenge-2026/.Net-Sprint-1), com clínicas, consultas de localização, observabilidade e projetos de testes |
 | Mobile Application Development | Versão mobile das entregas no repositório [Clyvo-Care](https://github.com/ClyvoPet-Challenge-2026/Clyvo-Care) |
 
-Para demonstrar o versionamento do banco, use a execução com Flyway habilitado. Para demonstrar o deploy ACI, considere as diferenças documentadas na seção de Azure. A verificação completa da entrega também depende de executar os fluxos e apresentar as evidências exigidas pela disciplina.
+Para demonstrar o versionamento do banco, mantenha o Flyway habilitado. A verificação completa da entrega também depende de executar os fluxos publicados e apresentar as evidências exigidas pela disciplina.
