@@ -131,6 +131,8 @@ As migrations ficam em [src/main/resources/db/migration](src/main/resources/db/m
 | `V1__create_baseline_schema.sql` | Cria a estrutura inicial, com 15 tabelas |
 | `V2__subscription_enums.sql` | Converte status e pagamento para texto, remove duas tabelas auxiliares e atualiza funções, procedimentos e trigger |
 | `V3__seed_demo_data.sql` | Inclui os dados de demonstração ausentes e corrige as contas legadas de Ana e Carlos |
+| `V4__create_packages.sql` | Organiza JSON, cálculos, relatórios e auditoria em packages e substitui as rotinas antigas |
+| `V5__escape_json_control_characters.sql` | Corrige o escape dos caracteres de controle no JSON, preservando os checksums anteriores |
 
 Após a V2, o schema tem 13 tabelas de aplicação. Ele inclui `TB_CAD_CLINIC`, usada pela API .NET, e as tabelas de eventos clínicos e lembretes previstas para a evolução dessa área. A existência dessas tabelas não significa que todos os respectivos endpoints já estejam implementados.
 
@@ -170,6 +172,16 @@ O diagrama de modelagem está em [docs/MER.png](docs/MER.png). Após aplicar a m
 
 O cálculo usado pela API está em `ContractPricingService`. A função SQL mantém as mesmas taxas para uso no banco; o serviço Java não chama essa função.
 
+A V5 atualiza somente o corpo de `PKG_JSON`. Além de aspas, barras, tabulação e quebras de linha, o escape cobre todos os caracteres de controle de código 0 a 31. Esses caracteres podem chegar pelos campos de texto; sem escape, o JSON produzido pelo Oracle pode ser recusado pelo leitor da aplicação. A atualização não altera tabelas nem regrava cadastros existentes.
+
+Após aplicar a V5, o [teste SQL de escape](docs/tests/json-escaping.sql) confere o retorno do texto original e a ausência de controles sem escape. No SQL*Plus, usando o usuário/schema da aplicação:
+
+```bash
+sqlplus -L 'APP_USER@//HOST:1521/XEPDB1' @docs/tests/json-escaping.sql
+```
+
+Informe a senha quando solicitada e ajuste host/serviço para o ambiente. O teste retorna sucesso para aspas, barras, Unicode e os 32 caracteres de controle; falhas encerram o script com erro. Ele não cria tabelas nem grava dados da aplicação. Esse teste usa Oracle real e é separado da suíte Maven com H2.
+
 ### Relatórios administrativos via Oracle
 
 Os endpoints abaixo exigem token de `ADMIN` e executam as procedures do package `PKG_RELATORIOS` por JDBC. Não usam consultas JPA como substituição quando o package está ausente.
@@ -190,7 +202,7 @@ curl -H "Authorization: Bearer $ADMIN_TOKEN" 'http://localhost:8080/relatorios/r
 
 Sem registros correspondentes, as procedures sinalizam os códigos Oracle `20031` ou `20041`, e a API responde `200` com lista vazia e total zero. Parâmetros inválidos retornam `400`, visitante recebe `401` e tutor recebe `403`. Falha de execução, package indisponível ou JSON inválido retornam `503` com mensagem genérica; registros de erro embutidos no JSON não são apresentados como sucesso.
 
-Antes de demonstrar, confira a versão 4 em `flyway_schema_history` e os packages/trigger em `USER_OBJECTS` e `USER_ERRORS`. O Flyway aplica a migration na inicialização normal; os scripts destrutivos de demonstração não são necessários para essa atualização. O deploy ACI descrito abaixo ainda desabilita Flyway e precisa ser ajustado antes de usar esses relatórios.
+Antes de demonstrar, confira as versões 4 e 5 em `flyway_schema_history` e os packages/trigger em `USER_OBJECTS` e `USER_ERRORS`. O Flyway aplica as migrations na inicialização normal; os scripts destrutivos de demonstração não são necessários para essa atualização. O deploy ACI descrito abaixo ainda desabilita Flyway e precisa ser ajustado antes de usar esses relatórios.
 
 ## Autenticação e permissões
 
@@ -428,6 +440,8 @@ Os testes verificam a inicialização do contexto, assinatura/verificação de J
 
 Os testes dos relatórios usam JDBC simulado para conferir parâmetros, leitura do CLOB/cursor, valores decimais, códigos de ausência de dados e liberação de recursos. Os testes HTTP conferem autorização, parâmetros, respostas e tratamento de falhas. Eles não executam os packages no Oracle; essa evidência deve ser obtida no ambiente com V4 aplicada.
 
+Uma validação integrada adicional foi executada com instalação limpa em Oracle XE 21c e atualização do schema existente no Oracle 19c da FIAP. Foram conferidos login Java e uso do JWT na .NET, persistência dos agendamentos, disputa por pet/data em conexões independentes, isolamento entre tutores, relatórios CLOB/cursor, auditoria, perfil, cancelamento e desativação. A V5 também foi conferida com caracteres de controle em um cadastro real. Os registros temporários foram removidos, preservando os cadastros anteriores; os logs de auditoria e de erros esperados da validação permanecem. Isso não substitui a verificação do deploy e do aplicativo no dispositivo.
+
 Para executar a suíte, use `./mvnw test` ou `.\mvnw.cmd test`.
 
 O gerador RSA tem uma verificação separada: `bash scripts/generate-keys.test.sh`. Ela cria um par temporário, confere sua correspondência e verifica a recusa de sobrescrita, sem modificar as chaves locais da aplicação.
@@ -518,7 +532,7 @@ SPRING_FLYWAY_ENABLED: "false"
 SPRING_JPA_HIBERNATE_DDL_AUTO: "update"
 ```
 
-Com isso, o Hibernate cria ou altera as tabelas, e o `DataInitializer` tenta carregar os dados de demonstração. As migrations V1, V2 e V3, incluindo os objetos PL/SQL, não são executadas nesse deploy.
+Com isso, o Hibernate cria ou altera as tabelas, e o `DataInitializer` tenta carregar os dados de demonstração. As migrations V1 a V5, incluindo os objetos PL/SQL, não são executadas nesse deploy.
 
 O script também cria o usuário `clyvocare`, mas conecta a API como `system`, usando `ORACLE_PWD`. Ao consultar as tabelas para conferir dados criados pela API, considere esse schema; o usuário anunciado no resumo do script é `APP_DB_USER`.
 
@@ -652,7 +666,7 @@ Outros arquivos úteis:
 | Disciplina | Onde encontrar a implementação |
 |---|---|
 | Java Advanced — frontend | Camada de visualização [ClyvoCare Web](https://github.com/ClyvoPet-Challenge-2026/Java-Sprint-1-Web), em React/Vite: login, pets, contratação, meus planos e gestão de status |
-| Java Advanced — Flyway | Migrations V1, V2 e V3 na execução normal |
+| Java Advanced — Flyway | Migrations V1 a V5 na execução normal |
 | Java Advanced — Spring Security | Perfis `ADMIN` e `OWNER`, JWT e permissões nos endpoints |
 | Java Advanced — fluxos de negócio | Simulação e contratação; mudança de status e troca de plano |
 | DevOps | Dockerfile e scripts de build, publicação, provisionamento e verificação no ACR + ACI |
