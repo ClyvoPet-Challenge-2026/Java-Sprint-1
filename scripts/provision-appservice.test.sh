@@ -31,7 +31,8 @@ az() {
         'group exists '*) echo "${TEST_GROUP_EXISTS:-false}"; return "${TEST_EXISTS_EXIT:-0}" ;;
         'group show '*) echo "${TEST_PROJECT_TAG:-clyvocare-sprint4}" ;;
         'group create '*) return 0 ;;
-        'provider register '*) return 0 ;;
+        'provider show '*) echo "${TEST_PROVIDER_STATE:-Registered}"; return "${TEST_PROVIDER_SHOW_EXIT:-0}" ;;
+        'provider register '*) return "${TEST_PROVIDER_REGISTER_EXIT:-0}" ;;
         'deployment group create')
             local argument parameter_path=''
             for argument in "$@"; do
@@ -65,15 +66,23 @@ expect_failure env TEST_ACCOUNT_EXIT=1 bash "$script_directory/provision-appserv
 expect_failure env TEST_EXISTS_EXIT=1 bash "$script_directory/provision-appservice.sh"
 expect_failure env TEST_GROUP_EXISTS=unknown bash "$script_directory/provision-appservice.sh"
 expect_failure env TEST_GROUP_EXISTS=true TEST_PROJECT_TAG=unrelated bash "$script_directory/provision-appservice.sh"
+expect_failure env TEST_GROUP_EXISTS=true TEST_PROVIDER_SHOW_EXIT=1 bash "$script_directory/provision-appservice.sh"
+expect_failure env TEST_GROUP_EXISTS=true TEST_PROVIDER_STATE=NotRegistered TEST_PROVIDER_REGISTER_EXIT=1 bash "$script_directory/provision-appservice.sh"
 
 for existing in false true; do
     : > "$TEST_CALLS"
     env TEST_GROUP_EXISTS="$existing" bash "$script_directory/provision-appservice.sh" > "$test_directory/output" 2>&1
     grep -q '^deployment group create.*--mode Incremental' "$TEST_CALLS"
+    ! grep -q '^provider register' "$TEST_CALLS"
     [[ ! -f "$(cat "$TEST_PARAMETER_PATH")" ]]
     if [[ "$existing" == true ]]; then ! grep -q '^group create' "$TEST_CALLS"; fi
     if [[ "$existing" == false ]]; then grep -q '^group create.*project=clyvocare-sprint4' "$TEST_CALLS"; fi
 done
+: > "$TEST_CALLS"
+env TEST_PROVIDER_STATE=NotRegistered bash "$script_directory/provision-appservice.sh" > "$test_directory/output" 2>&1
+grep -q '^provider register.*--wait' "$TEST_CALLS"
+grep -q '^deployment group create' "$TEST_CALLS"
+[[ ! -f "$(cat "$TEST_PARAMETER_PATH")" ]]
 if env TEST_DEPLOY_EXIT=17 bash "$script_directory/provision-appservice.sh" > "$test_directory/output" 2>&1; then
     echo 'Deployment failure was not propagated.' >&2
     exit 1

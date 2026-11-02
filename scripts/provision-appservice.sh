@@ -39,7 +39,10 @@ else
     echo "Unable to determine whether the resource group exists." >&2
     exit 1
 fi
-az provider register --subscription "$AZURE_SUBSCRIPTION_ID" --namespace Microsoft.Web --wait --output none
+provider_state=$(az provider show --subscription "$AZURE_SUBSCRIPTION_ID" --namespace Microsoft.Web --query registrationState --output tsv)
+if [[ "$provider_state" != Registered ]]; then
+    az provider register --subscription "$AZURE_SUBSCRIPTION_ID" --namespace Microsoft.Web --wait --output none
+fi
 az deployment group create --subscription "$AZURE_SUBSCRIPTION_ID" --resource-group "$AZURE_RESOURCE_GROUP" \
     --name clyvocare-appservice --mode Incremental --template-file "$template_path" \
     --parameters "@$parameter_path" --output none

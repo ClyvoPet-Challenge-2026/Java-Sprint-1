@@ -60,6 +60,7 @@ try {
         Mongo__DatabaseName: required('Mongo__DatabaseName'),
         JWT_PUBLIC_KEY_BASE64: required('JWT_PUBLIC_KEY_BASE64'),
         Jwt__Issuer: 'clyvocare-api',
+        Swagger__Enabled: 'true',
         ASPNETCORE_ENVIRONMENT: 'Production',
         DOTNET_ENVIRONMENT: 'Production',
         SCM_DO_BUILD_DURING_DEPLOYMENT: 'false'

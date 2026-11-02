@@ -38,6 +38,7 @@ assert.equal(dotnet.JWT_PRIVATE_KEY_BASE64, undefined);
 assert.equal(dotnet.Cors__AllowedOrigins__0, '');
 assert.equal(dotnet.Cors__AllowedOrigins__1, '');
 assert.equal(dotnet.DOTNET_ENVIRONMENT, 'Production');
+assert.equal(dotnet.Swagger__Enabled, 'true');
 
 const withCors = JSON.parse(run({ CORS_ALLOWED_ORIGINS: 'https://app.example.com' }).stdout).parameters;
 assert.equal(withCors.javaAppSettings.value.CORS_ALLOWED_ORIGINS, 'https://app.example.com');
