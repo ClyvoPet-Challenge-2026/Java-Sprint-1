@@ -1,0 +1,90 @@
+trigger:
+  branches:
+    include:
+      - master
+
+pr:
+  branches:
+    include:
+      - master
+
+pool:
+  vmImage: ubuntu-24.04
+
+variables:
+  azureServiceConnection: clyvocare-azure
+
+stages:
+  - stage: CI
+    displayName: Build, test and publish artifact
+    jobs:
+      - job: Build
+        steps:
+          - checkout: self
+          - task: JavaToolInstaller@0
+            inputs:
+              versionSpec: '17'
+              jdkArchitectureOption: x64
+              jdkSourceOption: PreInstalled
+          - bash: |
+              set -euo pipefail
+              node scripts/appservice-parameters.test.cjs
+              bash scripts/provision-appservice.test.sh
+              bash scripts/generate-keys.test.sh
+              bash scripts/start-appservice.test.sh
+              bash ./mvnw -B verify
+            displayName: Verify infrastructure scripts, startup and Java
+          - task: PublishTestResults@2
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: JUnit
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              failTaskOnFailedTests: true
+              failTaskOnMissingResultsFile: true
+          - bash: |
+              set -euo pipefail
+              mkdir -p "$PACKAGE_DIRECTORY/scripts"
+              jars=(target/*.jar)
+              [[ ${#jars[@]} == 1 && -f "${jars[0]}" ]]
+              cp -- "${jars[0]}" "$PACKAGE_DIRECTORY/app.jar"
+              cp -- scripts/start-appservice.sh "$PACKAGE_DIRECTORY/scripts/"
+            displayName: Stage only application and startup script
+            env:
+              PACKAGE_DIRECTORY: $(Build.ArtifactStagingDirectory)/package
+          - task: ArchiveFiles@2
+            inputs:
+              rootFolderOrFile: $(Build.ArtifactStagingDirectory)/package
+              includeRootFolder: false
+              archiveType: zip
+              archiveFile: $(Build.ArtifactStagingDirectory)/java.zip
+          - publish: $(Build.ArtifactStagingDirectory)/java.zip
+            artifact: java
+
+  - stage: CD
+    displayName: Deploy the CI artifact
+    dependsOn: CI
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/master'))
+    jobs:
+      - job: Deploy
+        steps:
+          - checkout: none
+          - download: current
+            artifact: java
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: $(azureServiceConnection)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                az webapp deploy --resource-group "$AZURE_RESOURCE_GROUP" --name "$JAVA_WEBAPP_NAME" \
+                  --src-path "$PIPELINE_WORKSPACE/java/java.zip" --type zip --restart true \
+                  --track-status true --output none
+                hostname=$(az webapp show --resource-group "$AZURE_RESOURCE_GROUP" \
+                  --name "$JAVA_WEBAPP_NAME" --query defaultHostName --output tsv)
+                curl --fail --silent --show-error --retry 10 --retry-all-errors --retry-delay 10 \
+                  --retry-max-time 180 --max-time 30 "https://$hostname/estados" --output /dev/null
+            env:
+              AZURE_RESOURCE_GROUP: $(azureResourceGroup)
+              JAVA_WEBAPP_NAME: $(javaWebAppName)
+              PIPELINE_WORKSPACE: $(Pipeline.Workspace)

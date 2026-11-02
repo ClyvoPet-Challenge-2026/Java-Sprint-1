@@ -1,0 +1,96 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": { "type": "string", "defaultValue": "eastus" },
+    "planName": { "type": "string" },
+    "javaAppName": { "type": "string" },
+    "dotnetAppName": { "type": "string" },
+    "javaAppSettings": { "type": "secureObject" },
+    "dotnetAppSettings": { "type": "secureObject" }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2024-11-01",
+      "name": "[parameters('planName')]",
+      "location": "[parameters('location')]",
+      "kind": "linux",
+      "sku": { "name": "B2", "tier": "Basic", "capacity": 1 },
+      "tags": { "project": "clyvocare-sprint4" },
+      "properties": { "reserved": true, "perSiteScaling": false }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2024-11-01",
+      "name": "[parameters('javaAppName')]",
+      "location": "[parameters('location')]",
+      "kind": "app,linux",
+      "tags": { "project": "clyvocare-sprint4" },
+      "dependsOn": [ "[resourceId('Microsoft.Web/serverfarms', parameters('planName'))]" ],
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('planName'))]",
+        "httpsOnly": true,
+        "clientAffinityEnabled": false,
+        "siteConfig": {
+          "linuxFxVersion": "JAVA|17-java17",
+          "appCommandLine": "bash /home/site/wwwroot/scripts/start-appservice.sh",
+          "alwaysOn": true,
+          "minTlsVersion": "1.2",
+          "scmMinTlsVersion": "1.2",
+          "ftpsState": "Disabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2024-11-01",
+      "name": "[parameters('dotnetAppName')]",
+      "location": "[parameters('location')]",
+      "kind": "app,linux",
+      "tags": { "project": "clyvocare-sprint4" },
+      "dependsOn": [ "[resourceId('Microsoft.Web/serverfarms', parameters('planName'))]" ],
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('planName'))]",
+        "httpsOnly": true,
+        "clientAffinityEnabled": false,
+        "siteConfig": {
+          "linuxFxVersion": "DOTNETCORE|9.0",
+          "appCommandLine": "bash /home/site/wwwroot/scripts/start-appservice.sh",
+          "alwaysOn": true,
+          "minTlsVersion": "1.2",
+          "scmMinTlsVersion": "1.2",
+          "ftpsState": "Disabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites/config",
+      "apiVersion": "2024-11-01",
+      "name": "[concat(parameters('javaAppName'), '/appsettings')]",
+      "dependsOn": [ "[resourceId('Microsoft.Web/sites', parameters('javaAppName'))]" ],
+      "properties": "[parameters('javaAppSettings')]"
+    },
+    {
+      "type": "Microsoft.Web/sites/config",
+      "apiVersion": "2024-11-01",
+      "name": "[concat(parameters('dotnetAppName'), '/appsettings')]",
+      "dependsOn": [ "[resourceId('Microsoft.Web/sites', parameters('dotnetAppName'))]" ],
+      "properties": "[union(parameters('dotnetAppSettings'), createObject('AllowedHosts', reference(resourceId('Microsoft.Web/sites', parameters('dotnetAppName')), '2024-11-01').defaultHostName))]"
+    }
+  ],
+  "outputs": {
+    "javaUrl": {
+      "type": "string",
+      "value": "[concat('https://', reference(resourceId('Microsoft.Web/sites', parameters('javaAppName')), '2024-11-01').defaultHostName)]"
+    },
+    "dotnetUrl": {
+      "type": "string",
+      "value": "[concat('https://', reference(resourceId('Microsoft.Web/sites', parameters('dotnetAppName')), '2024-11-01').defaultHostName)]"
+    },
+    "dotnetOutboundIpAddresses": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Web/sites', parameters('dotnetAppName')), '2024-11-01').possibleOutboundIpAddresses]"
+    }
+  }
+}

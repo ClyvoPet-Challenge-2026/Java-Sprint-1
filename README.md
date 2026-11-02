@@ -458,7 +458,7 @@ bash azure-acr-aci-test.sh http://SEU_FQDN:8080
 
 ## Inicialização no Azure App Service
 
-O script [scripts/start-appservice.sh](scripts/start-appservice.sh) prepara a execução nativa da API em **App Service Linux com Java SE 17**, sem publicar uma imagem Docker própria. Esta etapa prepara a inicialização; o provisionamento dos recursos e as pipelines ainda serão adicionados. O ambiente publicado ainda precisa ser validado na Azure.
+O script [scripts/start-appservice.sh](scripts/start-appservice.sh) prepara a execução nativa da API em **App Service Linux com Java SE 17**, sem publicar uma imagem Docker própria. O provisionamento compartilhado e a pipeline estão descritos abaixo. A execução completa ainda precisa ser validada na Azure e no Azure DevOps.
 
 O pacote de publicação deve conter o JAR executável como `app.jar` e o script em `scripts/start-appservice.sh`. O comando de inicialização do Web App será:
 
@@ -485,6 +485,80 @@ O script recusa iniciar sem a conexão explícita e os dois PEMs válidos do mes
 O perfil `appservice` desabilita a carga de demonstração, usa a porta fornecida pela plataforma (`SERVER_PORT`, ou `PORT`, com padrão `8080`) e interpreta os cabeçalhos encaminhados pelo proxy HTTPS. O Flyway continua habilitado e o Hibernate continua em `validate`; não use `create` ou `update` no schema compartilhado. As opções de `JAVA_OPTS` são encaminhadas ao interpretador de opções da JVM por `JDK_JAVA_OPTIONS`, preservando opções já presentes e sem executar comandos de shell. O JAR usa `AZURE_JAVA_APP_PATH` quando fornecido pela plataforma, ou `/home/site/wwwroot/app.jar`.
 
 Referências: [configuração Java no App Service](https://learn.microsoft.com/en-us/azure/app-service/configure-language-java-deploy-run) e [variáveis da plataforma](https://learn.microsoft.com/en-us/azure/app-service/reference-app-settings).
+
+### Provisionamento compartilhado
+
+O script [scripts/provision-appservice.sh](scripts/provision-appservice.sh) usa Azure CLI e o template [infra/appservice.json](infra/appservice.json) para criar um grupo dedicado, **um plano Linux B2 com uma instância** e **dois Web Apps**, Java e .NET, no mesmo plano. Registra o provedor `Microsoft.Web` e configura HTTPS, inicialização, Oracle, MongoDB e RSA. Este é o único provisionamento compartilhado: não execute uma segunda cópia pelo repositório .NET.
+
+**Executar esse script cria recursos pagos.** O plano continua sendo cobrado mesmo se os Web Apps forem parados. Confirme crédito, disponibilidade regional e período de uso antes de executar; a configuração não impõe um teto automático de gastos. Não utilize o grupo de uma implantação antiga ou de outro projeto.
+
+Pré-requisitos: Bash/Git Bash, Azure CLI atualizada, Node.js, OpenSSL, login na assinatura escolhida e permissão para criar os recursos. Prepare antes o **MongoDB Atlas Free**, com banco e usuário próprios; este template não cria uma conta nem um cluster Atlas e não substitui o Oracle da FIAP. Os scripts de coleções/importação estão em [docs/mongodb da .NET](https://github.com/ClyvoPet-Challenge-2026/.Net-Sprint-1/tree/develop/docs/mongodb). Prepare uma pública e uma privada RSA novas para o deploy, fora dos repositórios, com `scripts/generate-keys.sh`.
+
+Na raiz do repositório Java, configure nomes exclusivos. Substitua os exemplos pelos nomes do seu ambiente:
+
+```bash
+export AZURE_SUBSCRIPTION_ID='ID_DA_ASSINATURA'
+export AZURE_RESOURCE_GROUP='rg-clyvocare-sprint4'
+export AZURE_PLAN_NAME='asp-clyvocare-sprint4'
+export JAVA_WEBAPP_NAME='clyvocare-java-seu-sufixo'
+export DOTNET_WEBAPP_NAME='clyvocare-dotnet-seu-sufixo'
+export AZURE_LOCATION='eastus'
+export SPRING_DATASOURCE_URL='jdbc:oracle:thin:@oracle.fiap.com.br:1521:ORCL'
+export SPRING_DATASOURCE_USERNAME='SEU_RM'
+export Mongo__DatabaseName='clyvocare'
+export JWT_PRIVATE_KEY_BASE64="$(base64 < /CAMINHO/segredos/private_key.pem | tr -d '\r\n')"
+export JWT_PUBLIC_KEY_BASE64="$(base64 < /CAMINHO/segredos/public_key.pem | tr -d '\r\n')"
+```
+
+Informe os valores secretos sem gravá-los no histórico do terminal:
+
+```bash
+read -r -s -p 'Senha Oracle: ' SPRING_DATASOURCE_PASSWORD; printf '\n'
+export SPRING_DATASOURCE_PASSWORD
+read -r -s -p 'Connection string Oracle completa da .NET: ' ConnectionStrings__ClyvoCareOracle; printf '\n'
+export ConnectionStrings__ClyvoCareOracle
+read -r -s -p 'URI MongoDB Atlas: ' Mongo__ConnectionString; printf '\n'
+export Mongo__ConnectionString
+```
+
+A connection string .NET deve usar o **mesmo banco, usuário/schema e senha** da configuração Java, no formato `Data Source=oracle.fiap.com.br:1521/ORCL;User Id=SEU_RM;Password=SUA_SENHA;`. Para interfaces web, configure também `CORS_ALLOWED_ORIGINS` com as origens HTTPS separadas por vírgula, sem caminhos ou barra final. Sem essa variável, o provisionamento não habilita origens web; o aplicativo mobile nativo não depende de CORS.
+
+Depois de revisar as configurações e autorizar o custo, execute:
+
+```bash
+bash scripts/provision-appservice.sh
+```
+
+O script valida o par RSA antes de alterar recursos e usa a assinatura explícita em todos os comandos, sem trocar a assinatura padrão da CLI. Se o grupo já existir, exige a tag `project=clyvocare-sprint4`; não adicione essa tag a um grupo alheio para contornar a proteção. A implantação usa modo incremental. Reexecutar atualiza as configurações dos Web Apps, portanto mantenha os mesmos nomes, os valores atuais e o mesmo par de chaves. Renomear recursos não remove os antigos; uma falha parcial também pode deixar recursos cobrados. Confira o estado no portal antes de repetir ou encerrar o ambiente. Não há exclusão automática. Não use `--debug`, `set -x` ou gravação do terminal com os segredos carregados.
+
+Os parâmetros secretos são enviados como `secureObject`, por um arquivo temporário removido ao terminar, com permissão `600` no Linux. Não execute o gerador interno `appservice-parameters.cjs` diretamente no terminal: sua saída contém segredos. A saída normal do provisionamento mostra somente URLs e os IPs possíveis de saída da .NET. Configure esses IPs na lista de acesso do Atlas; não habilite acesso irrestrito como padrão. Confira se os IPs mudaram ao alterar o plano. Os valores podem ser retirados do ambiente do terminal depois do provisionamento.
+
+O script não publica as aplicações, não altera o schema Oracle, não executa o SQL de recriação e não prepara as coleções MongoDB. O primeiro deploy das APIs será feito pelas pipelines, depois das migrations e coleções conferidas. O plano B2 tem recursos compartilhados; o heap Java é limitado a `768m`. A .NET permanece em Production. As URLs reais retornadas pela Azure são utilizadas, incluindo o hostname efetivo da .NET em `AllowedHosts`.
+
+### CI/CD no Azure DevOps
+
+A pipeline [azure-pipelines.yml](azure-pipelines.yml) executa a cada alteração na **master**. No CI, verifica os scripts, executa `mvnw verify` com JDK 17, publica resultados JUnit e o artefato `java/java.zip` no Azure DevOps. O ZIP contém somente `app.jar` e `scripts/start-appservice.sh`, sem pasta externa envolvendo o conteúdo. Não inclui chaves nem parâmetros secretos.
+
+Após sucesso do CI na master, o CD baixa o artefato **da mesma execução**, publica no Web App usando Azure CLI e verifica `GET /estados` por HTTPS. Falhas de testes, publicação ou verificação HTTP fazem a pipeline falhar. Pull requests para master executam o CI, sem CD. O CD não recompila a aplicação nem executa o provisionamento de infraestrutura.
+
+Antes de executar a pipeline:
+
+1. Prepare a branch `master` a partir da versão validada, preservando o histórico, e faça commit/push pelo fluxo da equipe. Os repositórios atuais usam `develop`/`main`; apenas adicionar este YAML nessas branches não ativa o gatilho exigido.
+2. Crie o projeto privado **Sprint 4 – Azure DevOps**, Git e Scrum/Agile, com a descrição exigida pelo professor. Preserve o projeto antigo de organização das tarefas. Configure o acesso Basic do professor para a entrega.
+3. Confirme disponibilidade/minutos do agente Linux. O YAML usa `ubuntu-24.04`; a existência do pool Azure Pipelines não comprova concessão de execução gratuita. Não compre paralelismo automaticamente. Um agente próprio exige revisar o pool e instalar as ferramentas equivalentes.
+4. Crie uma conexão de serviço **Azure Resource Manager** chamada `clyvocare-azure`, preferencialmente com identidade federada, limitada ao grupo dedicado, e autorize esta pipeline. Se usar outro nome, ajuste `azureServiceConnection` no YAML.
+5. Conecte a pipeline ao repositório GitHub e selecione `/azure-pipelines.yml`. Configure as variáveis não secretas `azureResourceGroup` e `javaWebAppName` com os recursos provisionados. Credenciais de Oracle, Atlas e RSA pertencem às configurações protegidas dos Web Apps; o CI não precisa delas. Se usar Azure DevOps para provisionar, mantenha esses valores como variáveis secretas/Secure Files e não como texto no YAML.
+
+A .NET tem sua própria pipeline no repositório correspondente, apontando para o mesmo grupo e o seu Web App. O template compartilhado não cria o projeto DevOps, a conexão de serviço, a concessão do agente ou os acessos do professor. A aprovação de permissões e os testes reais de CI/CD ainda precisam ser concluídos; a presença dos arquivos não comprova a entrega.
+
+Para verificar os parâmetros e o fluxo do provisionamento sem criar recursos:
+
+```bash
+node scripts/appservice-parameters.test.cjs
+bash scripts/provision-appservice.test.sh
+```
+
+Os testes usam credenciais/chaves temporárias e uma CLI simulada; conferem falhas antes de alterações, proteção de grupo alheio, reutilização do grupo próprio, limpeza dos segredos e falha da implantação. Não comprovam quota, preço, permissões ou aceitação do template pela Azure. Referências: [artefatos de pipelines](https://learn.microsoft.com/en-us/azure/devops/pipelines/artifacts/pipeline-artifacts), [deploy de ZIP](https://learn.microsoft.com/en-us/azure/app-service/deploy-zip) e [parâmetros seguros ARM](https://learn.microsoft.com/en-us/azure/azure-resource-manager/templates/parameters#secure-parameters).
 
 ## Deploy no Azure ACR + ACI
 
