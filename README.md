@@ -44,6 +44,8 @@ git clone https://github.com/ClyvoPet-Challenge-2026/Java-Sprint-1.git
 cd Java-Sprint-1
 ```
 
+Após clonar, gere o par RSA uma única vez, na raiz deste repositório, com `bash scripts/generate-keys.sh`. É necessário OpenSSL, disponível também no Git Bash. O comando cria os dois PEMs em `.keys` e recusa sobrescrever arquivos existentes. Entregue somente a pública correspondente à API .NET; não gere um par separado para ela. Os caminhos externos estão documentados na seção de autenticação.
+
 Defina a conexão no mesmo terminal em que você vai iniciar a aplicação. Substitua os valores de usuário e senha pelos da sua conta Oracle.
 
 No **Bash ou Git Bash**:
@@ -214,14 +216,13 @@ O JWT vale por 30 minutos e é assinado com RSA (RS256). As chaves são carregad
 
 Para usar outro caminho, defina `JWT_PRIVATE_KEY` e `JWT_PUBLIC_KEY` como localizações de arquivo, por exemplo `file:/run/secrets/private_key.pem` e `file:/run/secrets/public_key.pem`. As variáveis recebem o caminho, não o conteúdo PEM. A API precisa dos dois arquivos para iniciar; a API .NET deve receber somente a pública correspondente.
 
-Se ainda não tiver um par de chaves, gere-o no Bash com OpenSSL:
+Se ainda não tiver um par de chaves, gere-o no Bash ou Git Bash com OpenSSL, a partir da raiz do repositório:
 
 ```bash
-mkdir -p .keys
-openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out .keys/private_key.pem
-openssl pkey -in .keys/private_key.pem -pubout -out .keys/public_key.pem
-chmod 600 .keys/private_key.pem
+bash scripts/generate-keys.sh
 ```
+
+Para gerar em outro diretório, passe o destino como primeiro argumento, por exemplo `bash scripts/generate-keys.sh /CAMINHO/segredos/jwt`. Guarde esse par fora da imagem e mantenha os mesmos arquivos entre reinicializações. Em containers, configure os caminhos montados com `JWT_PRIVATE_KEY` e `JWT_PUBLIC_KEY`; a .NET usa `Jwt__PublicKeyPath` para a mesma pública.
 
 Não sobrescreva um par em uso sem atualizar os serviços que o utilizam. O par anteriormente versionado permanece no histórico do Git e deve ser substituído antes de publicar o ambiente; remover os arquivos da revisão atual não revoga tokens. A troca de par exige novo login dos usuários.
 
@@ -428,6 +429,8 @@ Os testes verificam a inicialização do contexto, assinatura/verificação de J
 Os testes dos relatórios usam JDBC simulado para conferir parâmetros, leitura do CLOB/cursor, valores decimais, códigos de ausência de dados e liberação de recursos. Os testes HTTP conferem autorização, parâmetros, respostas e tratamento de falhas. Eles não executam os packages no Oracle; essa evidência deve ser obtida no ambiente com V4 aplicada.
 
 Para executar a suíte, use `./mvnw test` ou `.\mvnw.cmd test`.
+
+O gerador RSA tem uma verificação separada: `bash scripts/generate-keys.test.sh`. Ela cria um par temporário, confere sua correspondência e verifica a recusa de sobrescrita, sem modificar as chaves locais da aplicação.
 
 O script `azure-acr-aci-test.sh` faz verificações HTTP de documentação, login, consultas e cadastro de tutor e pet. Ele cria dados no ambiente informado. Você pode passar a URL explicitamente:
 
