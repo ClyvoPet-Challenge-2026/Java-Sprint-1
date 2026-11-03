@@ -1,5 +1,7 @@
 # ClyvoCare API
 
+Assista ao [vídeo de demonstração da Sprint 3 — Java Advanced](https://www.youtube.com/watch?v=yUemQcZabEs).
+
 API REST para cadastrar tutores, pets e planos de saúde, simular preços e acompanhar contratações. Construída em Spring Boot com Oracle, faz parte do Challenge FIAP 2026, turma 2TDSPG.
 
 Com ela, você pode consultar o catálogo de planos, contratar um plano para um pet e acompanhar seu status. Esta API complementa a [API .NET](https://github.com/ClyvoPet-Challenge-2026/.Net-Sprint-1), responsável pela parte de clínicas veterinárias do projeto.
