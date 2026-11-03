@@ -1,602 +1,1950 @@
-type: collection.insomnia.rest/5.0
-schema_version: "5.1"
-name: ClyvoCareJava
-meta:
-  id: wrk_clyvocare_java
-  created: 1789000000000
-  modified: 1789000000000
-  description: >-
-    Collection de testes da API ClyvoCare (Java / Spring Boot).
-
-    COMO USAR
-    1. Selecione o environment: "Base Environment" (localhost) ou "Azure App Service".
-       No "Azure App Service", troque base_url pela URL HTTPS retornada
-       no provisionamento, sem barra final:
-       https://<HOSTNAME>.azurewebsites.net
-    2. Rode "00 - Autenticacao > Login". Ele guarda o token em access_token
-       automaticamente; todas as rotas protegidas ja usam esse token.
-    3. Rode as pastas na ordem 01 -> 05. As requests de cadastro (Responsavel,
-       Pet, Contratacao) guardam o id gerado em owner_id / pet_id /
-       subscription_id, entao o Fluxo A e o Fluxo B funcionam em sequencia.
-
-    USUARIOS SEEDADOS (DataInitializer): ana@email.com / senha123 (ADMIN).
-    Enums: paymentMethod = PIX | DEBIT_CARD | CREDIT_CARD | BOLETO ;
-           status = ACTIVE | PENDING | INACTIVE.
-collection:
-  - name: 00 - Autenticacao
-    meta:
-      id: fld_00_auth
-      created: 1789000000000
-      modified: 1789000000000
-      sortKey: -6000
-      description: "Login publico. Guarda o JWT em access_token via script de after-response."
-    children:
-      - url: "{{ _.base_url }}/auth/login"
-        name: Login (ADMIN)
-        meta:
-          id: req_auth_login
-          created: 1789000000000
-          modified: 1789000000000
-          isPrivate: false
-          sortKey: -500
-          description: "POST /auth/login publico. Retorna { token }. O script guarda o token no environment."
-        method: POST
-        body:
-          mimeType: application/json
-          text: |-
-            {
-              "email": "ana@email.com",
-              "password": "senha123"
-            }
-        headers:
-          - name: Content-Type
-            value: application/json
-        scripts:
-          afterResponse: |-
-            try {
-              const data = insomnia.response.json();
-              if (data && data.token) {
-                insomnia.environment.set('access_token', data.token);
-                console.log('access_token atualizado');
-              }
-            } catch (e) {
-              console.log('Login: resposta sem token', e);
-            }
-        settings:
-          renderRequestBody: true
-          encodeUrl: true
-          followRedirects: global
-          cookies:
-            send: true
-            store: true
-          rebuildPath: true
-      - url: "{{ _.base_url }}/auth/login"
-        name: Login senha errada (espera 401)
-        meta:
-          id: req_auth_login_bad
-          created: 1789000000000
-          modified: 1789000000000
-          isPrivate: false
-          sortKey: -450
-          description: "Demonstra a rejeicao de credencial invalida."
-        method: POST
-        body:
-          mimeType: application/json
-          text: |-
-            {
-              "email": "ana@email.com",
-              "password": "errada"
-            }
-        headers:
-          - name: Content-Type
-            value: application/json
-        settings:
-          renderRequestBody: true
-          encodeUrl: true
-          followRedirects: global
-          cookies:
-            send: true
-            store: true
-          rebuildPath: true
-  - name: 01 - Lookups (GET)
-    meta:
-      id: fld_01_lookups
-      created: 1789000000000
-      modified: 1789000000000
-      sortKey: -5000
-      description: "Consultas das tabelas de apoio. Exigem token (qualquer perfil autenticado)."
-    children:
-      - url: "{{ _.base_url }}/planos"
-        name: GET Planos
-        meta: { id: req_get_planos, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -500, description: "" }
-        method: GET
-        headers:
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-      - url: "{{ _.base_url }}/especies"
-        name: GET Especies
-        meta: { id: req_get_especies, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -450, description: "" }
-        method: GET
-        headers:
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-      - url: "{{ _.base_url }}/racas"
-        name: GET Racas
-        meta: { id: req_get_racas, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -400, description: "" }
-        method: GET
-        headers:
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-      - url: "{{ _.base_url }}/estados"
-        name: GET Estados
-        meta: { id: req_get_estados, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -350, description: "" }
-        method: GET
-        headers:
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-      - url: "{{ _.base_url }}/estados"
-        name: GET Estados sem token (espera 401)
-        meta: { id: req_get_estados_noauth, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -340, description: "Prova que a rota e protegida." }
-        method: GET
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-      - url: "{{ _.base_url }}/cidades"
-        name: GET Cidades
-        meta: { id: req_get_cidades, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -300, description: "" }
-        method: GET
-        headers:
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-      - url: "{{ _.base_url }}/formas-pagamento"
-        name: GET Formas de Pagamento
-        meta: { id: req_get_formas, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -250, description: "Enum: CREDIT_CARD, DEBIT_CARD, BOLETO, PIX" }
-        method: GET
-        headers:
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-      - url: "{{ _.base_url }}/status-contratacao"
-        name: GET Status de Contratacao
-        meta: { id: req_get_status, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -200, description: "Enum: ACTIVE, PENDING, INACTIVE" }
-        method: GET
-        headers:
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-  - name: 02 - Cadastros (POST - ADMIN)
-    meta:
-      id: fld_02_cadastros
-      created: 1789000000000
-      modified: 1789000000000
-      sortKey: -4000
-      description: "Escrita nas tabelas de apoio. Exige perfil ADMIN. Valores escolhidos para nao colidir com os seeds."
-    children:
-      - url: "{{ _.base_url }}/estados"
-        name: POST Estado
-        meta: { id: req_post_estado, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -500, description: "" }
-        method: POST
-        body:
-          mimeType: application/json
-          text: |-
-            {
-              "name": "Espirito Santo",
-              "uf": "ES"
-            }
-        headers:
-          - name: Content-Type
-            value: application/json
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-      - url: "{{ _.base_url }}/cidades"
-        name: POST Cidade
-        meta: { id: req_post_cidade, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -400, description: "stateId 1 = primeiro estado seedado (SP)." }
-        method: POST
-        body:
-          mimeType: application/json
-          text: |-
-            {
-              "name": "Sorocaba",
-              "stateId": 1
-            }
-        headers:
-          - name: Content-Type
-            value: application/json
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-      - url: "{{ _.base_url }}/especies"
-        name: POST Especie
-        meta: { id: req_post_especie, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -300, description: "" }
-        method: POST
-        body:
-          mimeType: application/json
-          text: |-
-            {
-              "name": "Ferret"
-            }
-        headers:
-          - name: Content-Type
-            value: application/json
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-      - url: "{{ _.base_url }}/racas"
-        name: POST Raca
-        meta: { id: req_post_raca, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -200, description: "speciesId 1 = primeira especie seedada (Dog)." }
-        method: POST
-        body:
-          mimeType: application/json
-          text: |-
-            {
-              "name": "Vira-lata",
-              "speciesId": 1
-            }
-        headers:
-          - name: Content-Type
-            value: application/json
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-      - url: "{{ _.base_url }}/planos"
-        name: POST Plano
-        meta: { id: req_post_plano, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -100, description: "" }
-        method: POST
-        body:
-          mimeType: application/json
-          text: |-
-            {
-              "name": "Plano Teste",
-              "monthlyValue": 59.90
-            }
-        headers:
-          - name: Content-Type
-            value: application/json
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-  - name: 03 - Responsaveis e Pets
-    meta:
-      id: fld_03_owners_pets
-      created: 1789000000000
-      modified: 1789000000000
-      sortKey: -3000
-      description: "POST /responsaveis e publico (auto-cadastro, forca perfil OWNER). O resto exige token."
-    children:
-      - url: "{{ _.base_url }}/responsaveis"
-        name: POST Responsavel (publico)
-        meta: { id: req_post_owner, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -500, description: "Guarda o id gerado em owner_id. Se der 409 de CPF/email, troque os valores." }
-        method: POST
-        body:
-          mimeType: application/json
-          text: |-
-            {
-              "name": "Tutor Collection",
-              "cpf": "529.982.247-25",
-              "email": "tutor.collection@clyvocare.com",
-              "password": "SenhaTutor123",
-              "phone": "(11) 98888-7777",
-              "cityId": 1
-            }
-        headers:
-          - name: Content-Type
-            value: application/json
-        scripts:
-          afterResponse: |-
-            try {
-              const data = insomnia.response.json();
-              if (data && data.id != null) {
-                insomnia.environment.set('owner_id', String(data.id));
-                console.log('owner_id =', data.id);
-              }
-            } catch (e) { console.log('POST responsavel sem id', e); }
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-      - url: "{{ _.base_url }}/responsaveis"
-        name: GET Responsaveis (ADMIN)
-        meta: { id: req_get_owners, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -400, description: "" }
-        method: GET
-        headers:
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-      - url: "{{ _.base_url }}/responsaveis/{{ _.owner_id }}"
-        name: GET Responsavel por ID
-        meta: { id: req_get_owner_id, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -350, description: "" }
-        method: GET
-        headers:
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-      - url: "{{ _.base_url }}/pets"
-        name: POST Pet
-        meta: { id: req_post_pet, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -300, description: "Guarda o id gerado em pet_id. speciesId 1 = Dog, breedId 1 = primeira raca de Dog." }
-        method: POST
-        body:
-          mimeType: application/json
-          text: |-
-            {
-              "name": "Rex Collection",
-              "birthDate": "2022-05-10",
-              "sex": "MALE",
-              "ownerId": {{ _.owner_id }},
-              "speciesId": 1,
-              "breedId": 1
-            }
-        headers:
-          - name: Content-Type
-            value: application/json
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        scripts:
-          afterResponse: |-
-            try {
-              const data = insomnia.response.json();
-              if (data && data.id != null) {
-                insomnia.environment.set('pet_id', String(data.id));
-                console.log('pet_id =', data.id);
-              }
-            } catch (e) { console.log('POST pet sem id', e); }
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-      - url: "{{ _.base_url }}/pets"
-        name: GET Pets
-        meta: { id: req_get_pets, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -200, description: "" }
-        method: GET
-        headers:
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-      - url: "{{ _.base_url }}/pets/{{ _.pet_id }}"
-        name: GET Pet por ID
-        meta: { id: req_get_pet_id, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -100, description: "" }
-        method: GET
-        headers:
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-  - name: 04 - Fluxo A - Simulacao e Contratacao
-    meta:
-      id: fld_04_fluxo_a
-      created: 1789000000000
-      modified: 1789000000000
-      sortKey: -2000
-      description: "Desconto por forma de pagamento (PIX -5%, DEBIT_CARD -3%), status inicial ACTIVE, bloqueio de contratacao ativa duplicada por pet."
-    children:
-      - url: "{{ _.base_url }}/contratacoes/simulacao"
-        name: POST Simulacao (PIX)
-        meta: { id: req_post_sim, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -500, description: "Nao persiste. Retorna baseValue / discountRate / discountAmount / finalValue." }
-        method: POST
-        body:
-          mimeType: application/json
-          text: |-
-            {
-              "planId": 1,
-              "paymentMethod": "PIX"
-            }
-        headers:
-          - name: Content-Type
-            value: application/json
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-      - url: "{{ _.base_url }}/contratacoes"
-        name: POST Contratacao
-        meta: { id: req_post_sub, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -400, description: "Guarda o id em subscription_id. Cria com status ACTIVE e valor com desconto." }
-        method: POST
-        body:
-          mimeType: application/json
-          text: |-
-            {
-              "petId": {{ _.pet_id }},
-              "planId": 1,
-              "paymentMethod": "PIX"
-            }
-        headers:
-          - name: Content-Type
-            value: application/json
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        scripts:
-          afterResponse: |-
-            try {
-              const data = insomnia.response.json();
-              if (data && data.id != null) {
-                insomnia.environment.set('subscription_id', String(data.id));
-                console.log('subscription_id =', data.id);
-              }
-            } catch (e) { console.log('POST contratacao sem id', e); }
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-      - url: "{{ _.base_url }}/contratacoes"
-        name: POST Contratacao duplicada (espera 409)
-        meta: { id: req_post_sub_dup, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -350, description: "Mesmo pet ja tem contratacao ACTIVE -> 409." }
-        method: POST
-        body:
-          mimeType: application/json
-          text: |-
-            {
-              "petId": {{ _.pet_id }},
-              "planId": 1,
-              "paymentMethod": "PIX"
-            }
-        headers:
-          - name: Content-Type
-            value: application/json
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-      - url: "{{ _.base_url }}/contratacoes"
-        name: GET Contratacoes
-        meta: { id: req_get_subs, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -300, description: "" }
-        method: GET
-        headers:
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-      - url: "{{ _.base_url }}/contratacoes/{{ _.subscription_id }}"
-        name: GET Contratacao por ID
-        meta: { id: req_get_sub_id, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -200, description: "" }
-        method: GET
-        headers:
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-  - name: 05 - Fluxo B - Ciclo de Vida
-    meta:
-      id: fld_05_fluxo_b
-      created: 1789000000000
-      modified: 1789000000000
-      sortKey: -1000
-      description: "Maquina de estados. Transicoes validas: ACTIVE<->PENDING, ACTIVE/PENDING->INACTIVE. INACTIVE e terminal. Troca de plano so em ACTIVE/PENDING. Rode em ordem."
-    children:
-      - url: "{{ _.base_url }}/contratacoes/{{ _.subscription_id }}/status"
-        name: PATCH Status -> PENDING
-        meta: { id: req_patch_pending, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -500, description: "ACTIVE -> PENDING (valido)." }
-        method: PATCH
-        body:
-          mimeType: application/json
-          text: |-
-            {
-              "status": "PENDING"
-            }
-        headers:
-          - name: Content-Type
-            value: application/json
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-      - url: "{{ _.base_url }}/contratacoes/{{ _.subscription_id }}/troca-plano"
-        name: POST Troca de Plano
-        meta: { id: req_post_troca, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -400, description: "Permitido em PENDING. Recalcula o preco com o novo plano/pagamento." }
-        method: POST
-        body:
-          mimeType: application/json
-          text: |-
-            {
-              "planId": 3,
-              "paymentMethod": "DEBIT_CARD"
-            }
-        headers:
-          - name: Content-Type
-            value: application/json
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-      - url: "{{ _.base_url }}/contratacoes/{{ _.subscription_id }}"
-        name: PUT Contratacao
-        meta: { id: req_put_sub, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -300, description: "Atualiza pet/plano/pagamento e recalcula o preco, preservando o status." }
-        method: PUT
-        body:
-          mimeType: application/json
-          text: |-
-            {
-              "petId": {{ _.pet_id }},
-              "planId": 2,
-              "paymentMethod": "BOLETO"
-            }
-        headers:
-          - name: Content-Type
-            value: application/json
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-      - url: "{{ _.base_url }}/contratacoes/{{ _.subscription_id }}/status"
-        name: PATCH Status -> ACTIVE
-        meta: { id: req_patch_active, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -250, description: "PENDING -> ACTIVE (valido)." }
-        method: PATCH
-        body:
-          mimeType: application/json
-          text: |-
-            {
-              "status": "ACTIVE"
-            }
-        headers:
-          - name: Content-Type
-            value: application/json
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-      - url: "{{ _.base_url }}/contratacoes/{{ _.subscription_id }}/status"
-        name: PATCH Status -> INACTIVE
-        meta: { id: req_patch_inactive, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -200, description: "ACTIVE -> INACTIVE (valido). Encerra a contratacao." }
-        method: PATCH
-        body:
-          mimeType: application/json
-          text: |-
-            {
-              "status": "INACTIVE"
-            }
-        headers:
-          - name: Content-Type
-            value: application/json
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-      - url: "{{ _.base_url }}/contratacoes/{{ _.subscription_id }}/status"
-        name: PATCH Status -> ACTIVE (espera 409 - terminal)
-        meta: { id: req_patch_terminal, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -150, description: "INACTIVE e terminal -> 409." }
-        method: PATCH
-        body:
-          mimeType: application/json
-          text: |-
-            {
-              "status": "ACTIVE"
-            }
-        headers:
-          - name: Content-Type
-            value: application/json
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-      - url: "{{ _.base_url }}/contratacoes/{{ _.subscription_id }}/troca-plano"
-        name: POST Troca de Plano em INACTIVE (espera 409)
-        meta: { id: req_post_troca_inactive, created: 1789000000000, modified: 1789000000000, isPrivate: false, sortKey: -100, description: "Troca de plano so vale em ACTIVE/PENDING -> 409." }
-        method: POST
-        body:
-          mimeType: application/json
-          text: |-
-            {
-              "planId": 4,
-              "paymentMethod": "CREDIT_CARD"
-            }
-        headers:
-          - name: Content-Type
-            value: application/json
-          - name: Authorization
-            value: "Bearer {{ _.access_token }}"
-        settings: { renderRequestBody: true, encodeUrl: true, followRedirects: global, cookies: { send: true, store: true }, rebuildPath: true }
-cookieJar:
-  name: Default Jar
-  meta:
-    id: jar_clyvocare_java
-    created: 1789000000000
-    modified: 1789000000000
-environments:
-  name: Base Environment
-  meta:
-    id: env_base_clyvocare
-    created: 1789000000000
-    modified: 1789000000000
-    isPrivate: false
-  data:
-    base_url: http://localhost:8080
-    access_token: ""
-    owner_id: "1"
-    pet_id: "1"
-    subscription_id: "1"
-  subEnvironments:
-    - name: Azure App Service
-      meta:
-        id: env_azure_appservice
-        created: 1789000000000
-        modified: 1789000000000
-        isPrivate: false
-        sortKey: 0
-      data:
-        base_url: https://SUBSTITUA-PELO-HOSTNAME.azurewebsites.net
-        access_token: ""
-        owner_id: "1"
-        pet_id: "1"
-        subscription_id: "1"
+openapi: 3.1.0
+info:
+  title: ClyvoCare API - Cadastros e Contratação
+  description: API Java do projeto ClyvoCare (Challenge FIAP SPRINT 1). Responsável pelo cadastro de responsáveis,
+    pets, planos, contratações e tabelas auxiliares.
+  version: 1.0.0
+servers:
+- url: https://clyvocare-java-rm561584.azurewebsites.net
+  description: Generated server url
+security:
+- BearerAuth: []
+tags:
+- name: Status de Contratação
+  description: Valores fixos permitidos para uma contratação
+- name: Cidades
+  description: CRUD de cidades com referência a estado (lookup, leitura cacheada)
+- name: Contratações
+  description: Gestão de contratações e simulação de preços com desconto
+- name: Estados
+  description: CRUD de estados brasileiros (lookup, leitura cacheada)
+- name: Responsáveis
+  description: CRUD dos responsáveis pelos pets (tutores) com paginação, busca por filtros e senha hasheada via
+    BCrypt
+- name: Relatórios
+  description: Relatórios administrativos executados pelos packages Oracle
+- name: Raças
+  description: CRUD das raças vinculadas a uma espécie (Labrador, Persa, etc)
+- name: Formas de Pagamento
+  description: Formas de pagamento aceitas nas contratações
+- name: Espécies
+  description: CRUD das espécies de pets cadastradas (Cão, Gato, etc)
+- name: Pets
+  description: CRUD dos pets com paginação e filtros por nome, dono, espécie e raça
+- name: Planos
+  description: CRUD dos planos de saúde pet (Bronze, Prata, Ouro, etc)
+paths:
+  /responsaveis/{id}:
+    get:
+      tags:
+      - Responsáveis
+      summary: Busca responsável por ID
+      operationId: findById
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: Responsável encontrado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/OwnerResponse'
+        '404':
+          description: Responsável não encontrado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/OwnerResponse'
+    put:
+      tags:
+      - Responsáveis
+      summary: Atualiza um responsável existente (senha é re-hasheada)
+      operationId: update
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerRequest'
+        required: true
+      responses:
+        '200':
+          description: Responsável atualizado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/OwnerResponse'
+        '400':
+          description: Erro de validação
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/OwnerResponse'
+        '404':
+          description: Responsável ou cidade não encontrado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/OwnerResponse'
+    delete:
+      tags:
+      - Responsáveis
+      summary: Desativa um responsável, preservando os registros relacionados
+      operationId: delete
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '204':
+          description: Responsável desativado
+        '404':
+          description: Responsável não encontrado
+  /racas/{id}:
+    get:
+      tags:
+      - Raças
+      summary: Busca raça por ID
+      operationId: findById_1
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: Raça encontrada
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/BreedResponse'
+        '404':
+          description: Raça não encontrada
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/BreedResponse'
+    put:
+      tags:
+      - Raças
+      summary: Atualiza uma raça existente
+      operationId: update_1
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BreedRequest'
+        required: true
+      responses:
+        '200':
+          description: Raça atualizada
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/BreedResponse'
+        '400':
+          description: Erro de validação
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/BreedResponse'
+        '404':
+          description: Raça ou espécie não encontrada
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/BreedResponse'
+    delete:
+      tags:
+      - Raças
+      summary: Remove uma raça
+      operationId: delete_1
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '204':
+          description: Raça removida
+        '404':
+          description: Raça não encontrada
+  /planos/{id}:
+    get:
+      tags:
+      - Planos
+      summary: Busca plano por ID
+      operationId: findById_2
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: Plano encontrado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/PlanResponse'
+        '404':
+          description: Plano não encontrado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/PlanResponse'
+    put:
+      tags:
+      - Planos
+      summary: Atualiza um plano existente
+      operationId: update_2
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanRequest'
+        required: true
+      responses:
+        '200':
+          description: Plano atualizado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/PlanResponse'
+        '400':
+          description: Erro de validação
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/PlanResponse'
+        '404':
+          description: Plano não encontrado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/PlanResponse'
+    delete:
+      tags:
+      - Planos
+      summary: Remove um plano
+      operationId: delete_2
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '204':
+          description: Plano removido
+        '404':
+          description: Plano não encontrado
+  /pets/{id}:
+    get:
+      tags:
+      - Pets
+      summary: Busca pet por ID
+      operationId: findById_3
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: Pet encontrado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/PetResponse'
+        '404':
+          description: Pet não encontrado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/PetResponse'
+    put:
+      tags:
+      - Pets
+      summary: Atualiza um pet existente
+      operationId: update_3
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PetRequest'
+        required: true
+      responses:
+        '200':
+          description: Pet atualizado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/PetResponse'
+        '400':
+          description: Erro de validação
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/PetResponse'
+        '404':
+          description: Pet, owner, espécie ou raça não encontrado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/PetResponse'
+    delete:
+      tags:
+      - Pets
+      summary: Remove um pet
+      operationId: delete_3
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '204':
+          description: Pet removido
+        '404':
+          description: Pet não encontrado
+  /estados/{id}:
+    get:
+      tags:
+      - Estados
+      summary: Busca estado por ID
+      operationId: findById_4
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: Estado encontrado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/StateResponse'
+        '404':
+          description: Estado não encontrado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/StateResponse'
+    put:
+      tags:
+      - Estados
+      summary: Atualiza um estado existente
+      operationId: update_4
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StateRequest'
+        required: true
+      responses:
+        '200':
+          description: Estado atualizado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/StateResponse'
+        '400':
+          description: Erro de validação
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/StateResponse'
+        '404':
+          description: Estado não encontrado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/StateResponse'
+    delete:
+      tags:
+      - Estados
+      summary: Remove um estado
+      operationId: delete_4
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '204':
+          description: Estado removido
+        '404':
+          description: Estado não encontrado
+  /especies/{id}:
+    get:
+      tags:
+      - Espécies
+      summary: Busca espécie por ID
+      operationId: findById_5
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: Espécie encontrada
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SpeciesResponse'
+        '404':
+          description: Espécie não encontrada
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SpeciesResponse'
+    put:
+      tags:
+      - Espécies
+      summary: Atualiza uma espécie existente
+      operationId: update_5
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpeciesRequest'
+        required: true
+      responses:
+        '200':
+          description: Espécie atualizada
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SpeciesResponse'
+        '400':
+          description: Erro de validação
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SpeciesResponse'
+        '404':
+          description: Espécie não encontrada
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SpeciesResponse'
+    delete:
+      tags:
+      - Espécies
+      summary: Remove uma espécie
+      operationId: delete_5
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '204':
+          description: Espécie removida
+        '404':
+          description: Espécie não encontrada
+  /contratacoes/{id}:
+    get:
+      tags:
+      - Contratações
+      summary: Busca contratação por ID
+      operationId: findById_6
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: Contratação encontrada
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+        '404':
+          description: Contratação não encontrada
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+    put:
+      tags:
+      - Contratações
+      summary: Atualiza a contratação e recalcula o preço, preservando o status
+      operationId: update_6
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionRequest'
+        required: true
+      responses:
+        '200':
+          description: Contratação atualizada
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+        '400':
+          description: Erro de validação
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+        '404':
+          description: Contratação, pet ou plano não encontrado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+        '409':
+          description: Contratação encerrada ou pet já possui outra contratação ativa
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+    delete:
+      tags:
+      - Contratações
+      summary: Remove uma contratação
+      operationId: delete_6
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '204':
+          description: Contratação removida
+        '404':
+          description: Contratação não encontrada
+  /cidades/{id}:
+    get:
+      tags:
+      - Cidades
+      summary: Busca cidade por ID
+      operationId: findById_7
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: Cidade encontrada
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/CityResponse'
+        '404':
+          description: Cidade não encontrada
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/CityResponse'
+    put:
+      tags:
+      - Cidades
+      summary: Atualiza uma cidade existente
+      operationId: update_7
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CityRequest'
+        required: true
+      responses:
+        '200':
+          description: Cidade atualizada
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/CityResponse'
+        '400':
+          description: Erro de validação
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/CityResponse'
+        '404':
+          description: Cidade ou estado não encontrado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/CityResponse'
+    delete:
+      tags:
+      - Cidades
+      summary: Remove uma cidade
+      operationId: delete_7
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '204':
+          description: Cidade removida
+        '404':
+          description: Cidade não encontrada
+  /responsaveis:
+    get:
+      tags:
+      - Responsáveis
+      summary: Lista responsáveis com paginação e filtros opcionais por nome, CPF e email
+      operationId: findAll
+      parameters:
+      - name: name
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: cpf
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: email
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/Pageable'
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/PageOwnerResponse'
+    post:
+      tags:
+      - Responsáveis
+      summary: Cria um novo responsável (senha é hasheada com BCrypt antes de salvar)
+      operationId: create
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerRequest'
+        required: true
+      responses:
+        '201':
+          description: Responsável criado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/OwnerResponse'
+        '400':
+          description: Erro de validação (CPF/email inválido, campos obrigatórios)
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/OwnerResponse'
+        '404':
+          description: Cidade informada não existe
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/OwnerResponse'
+        '409':
+          description: CPF ou email já cadastrado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/OwnerResponse'
+  /racas:
+    get:
+      tags:
+      - Raças
+      summary: Lista todas as raças
+      operationId: findAll_1
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BreedResponse'
+    post:
+      tags:
+      - Raças
+      summary: Cria uma nova raça vinculada a uma espécie existente
+      operationId: create_1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BreedRequest'
+        required: true
+      responses:
+        '201':
+          description: Raça criada
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/BreedResponse'
+        '400':
+          description: Erro de validação
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/BreedResponse'
+        '404':
+          description: Espécie informada não existe
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/BreedResponse'
+  /planos:
+    get:
+      tags:
+      - Planos
+      summary: Lista todos os planos disponíveis
+      operationId: findAll_2
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlanResponse'
+    post:
+      tags:
+      - Planos
+      summary: Cria um novo plano
+      operationId: create_2
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanRequest'
+        required: true
+      responses:
+        '201':
+          description: Plano criado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/PlanResponse'
+        '400':
+          description: Erro de validação
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/PlanResponse'
+  /pets:
+    get:
+      tags:
+      - Pets
+      summary: Lista pets com paginação e filtros opcionais
+      operationId: findAll_3
+      parameters:
+      - name: name
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: ownerId
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+      - name: speciesId
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+      - name: breedId
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/Pageable'
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/PagePetResponse'
+    post:
+      tags:
+      - Pets
+      summary: Cadastra um novo pet (raça é opcional para vira-latas)
+      operationId: create_3
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PetRequest'
+        required: true
+      responses:
+        '201':
+          description: Pet criado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/PetResponse'
+        '400':
+          description: Erro de validação (data futura, sexo inválido, campos obrigatórios)
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/PetResponse'
+        '404':
+          description: Owner, espécie ou raça informada não existe
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/PetResponse'
+  /estados:
+    get:
+      tags:
+      - Estados
+      summary: Lista todos os estados
+      operationId: findAll_4
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StateResponse'
+    post:
+      tags:
+      - Estados
+      summary: Cria um novo estado
+      operationId: create_4
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StateRequest'
+        required: true
+      responses:
+        '201':
+          description: Estado criado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/StateResponse'
+        '400':
+          description: Erro de validação
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/StateResponse'
+  /especies:
+    get:
+      tags:
+      - Espécies
+      summary: Lista todas as espécies
+      operationId: findAll_5
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SpeciesResponse'
+    post:
+      tags:
+      - Espécies
+      summary: Cria uma nova espécie
+      operationId: create_5
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpeciesRequest'
+        required: true
+      responses:
+        '201':
+          description: Espécie criada
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SpeciesResponse'
+        '400':
+          description: Erro de validação
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SpeciesResponse'
+  /contratacoes:
+    get:
+      tags:
+      - Contratações
+      summary: Lista contratações com paginação e filtros opcionais
+      operationId: findAll_6
+      parameters:
+      - name: petId
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+      - name: planId
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - PENDING
+      - name: paymentMethod
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - CREDIT_CARD
+          - DEBIT_CARD
+          - BOLETO
+          - PIX
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/Pageable'
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/PageSubscriptionResponse'
+    post:
+      tags:
+      - Contratações
+      summary: Cria uma contratação ACTIVE com desconto por pagamento
+      operationId: create_6
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionRequest'
+        required: true
+      responses:
+        '201':
+          description: Contratação criada
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+        '400':
+          description: Erro de validação
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+        '404':
+          description: Pet ou plano não encontrado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+        '409':
+          description: Pet já possui contratação ativa
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+  /contratacoes/{id}/troca-plano:
+    post:
+      tags:
+      - Contratações
+      summary: Troca o plano de uma contratação ACTIVE ou PENDING e recalcula o preço
+      operationId: changePlan
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePlanRequest'
+        required: true
+      responses:
+        '200':
+          description: Plano atualizado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+        '400':
+          description: Erro de validação
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+        '404':
+          description: Contratação ou plano não encontrado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+        '409':
+          description: Contratação encerrada
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+  /contratacoes/simulacao:
+    post:
+      tags:
+      - Contratações
+      summary: Simula o preço da contratação com desconto
+      operationId: simulate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionSimulationRequest'
+        required: true
+      responses:
+        '200':
+          description: Simulação calculada
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SubscriptionSimulationResponse'
+        '400':
+          description: Erro de validação
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SubscriptionSimulationResponse'
+        '404':
+          description: Plano não encontrado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SubscriptionSimulationResponse'
+  /cidades:
+    get:
+      tags:
+      - Cidades
+      summary: Lista todas as cidades
+      operationId: findAll_7
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CityResponse'
+    post:
+      tags:
+      - Cidades
+      summary: Cria uma nova cidade vinculada a um estado existente
+      operationId: create_7
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CityRequest'
+        required: true
+      responses:
+        '201':
+          description: Cidade criada
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/CityResponse'
+        '400':
+          description: Erro de validação
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/CityResponse'
+        '404':
+          description: Estado informado não existe
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/CityResponse'
+  /auth/login:
+    post:
+      tags:
+      - auth-controller
+      operationId: login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+  /contratacoes/{id}/status:
+    patch:
+      tags:
+      - Contratações
+      summary: Altera o status conforme as transições permitidas
+      operationId: changeStatus
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeStatusRequest'
+        required: true
+      responses:
+        '200':
+          description: Status atualizado
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+        '400':
+          description: Erro de validação
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+        '403':
+          description: Alteração de status exclusiva de administrador
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+        '404':
+          description: Contratação não encontrada
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+        '409':
+          description: Transição inválida ou pet já possui outra contratação ativa
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+  /status-contratacao:
+    get:
+      tags:
+      - Status de Contratação
+      summary: Lista os status de contratação, sem consulta ao banco
+      operationId: findAll_8
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  type: string
+                  enum:
+                  - ACTIVE
+                  - INACTIVE
+                  - PENDING
+  /relatorios/receita:
+    get:
+      tags:
+      - Relatórios
+      summary: Consulta receita, subtotais por plano e total geral via PKG_RELATORIOS.REPORT_REVENUE
+      operationId: revenue
+      parameters:
+      - name: minValue
+        in: query
+        required: false
+        schema:
+          type: number
+          default: 0
+          minimum: 0.0
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/RevenueReportResponse'
+  /relatorios/contratacoes:
+    get:
+      tags:
+      - Relatórios
+      summary: Consulta contratações via PKG_RELATORIOS.REPORT_SUBSCRIPTIONS
+      operationId: subscriptions
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - PENDING
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SubscriptionReportResponse'
+  /formas-pagamento:
+    get:
+      tags:
+      - Formas de Pagamento
+      summary: Lista as formas de pagamento aceitas
+      operationId: findAll_9
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  type: string
+                  enum:
+                  - CREDIT_CARD
+                  - DEBIT_CARD
+                  - BOLETO
+                  - PIX
+  /contratacoes/minhas:
+    get:
+      tags:
+      - Contratações
+      summary: Lista os planos ativos dos pets do usuário autenticado
+      operationId: findMyActiveSubscriptions
+      parameters:
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/Pageable'
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/PageSubscriptionResponse'
+  /auth/me:
+    get:
+      tags:
+      - auth-controller
+      operationId: me
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/OwnerResponse'
+components:
+  schemas:
+    OwnerRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 150
+          minLength: 0
+        cpf:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          format: email
+          maxLength: 150
+          minLength: 0
+        password:
+          type: string
+          maxLength: 100
+          minLength: 8
+        phone:
+          type: string
+          maxLength: 20
+          minLength: 0
+        cityId:
+          type: integer
+          format: int64
+      required:
+      - cityId
+      - cpf
+      - email
+      - name
+      - password
+      - phone
+    CityResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        state:
+          $ref: '#/components/schemas/StateResponse'
+    OwnerResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        cpf:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        roleName:
+          type: string
+        city:
+          $ref: '#/components/schemas/CityResponse'
+        createdAt:
+          type: string
+          format: date-time
+    StateResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        uf:
+          type: string
+    BreedRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+          minLength: 0
+        speciesId:
+          type: integer
+          format: int64
+      required:
+      - name
+      - speciesId
+    BreedResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        species:
+          $ref: '#/components/schemas/SpeciesResponse'
+    SpeciesResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    PlanRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 50
+          minLength: 0
+        monthlyValue:
+          type: number
+      required:
+      - monthlyValue
+      - name
+    PlanResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        monthlyValue:
+          type: number
+    PetRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+          minLength: 0
+        birthDate:
+          type: string
+          format: date
+        sex:
+          type: string
+          enum:
+          - MALE
+          - FEMALE
+        ownerId:
+          type: integer
+          format: int64
+        speciesId:
+          type: integer
+          format: int64
+        breedId:
+          type: integer
+          format: int64
+      required:
+      - birthDate
+      - name
+      - ownerId
+      - sex
+      - speciesId
+    PetResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        birthDate:
+          type: string
+          format: date
+        sex:
+          type: string
+          enum:
+          - MALE
+          - FEMALE
+        owner:
+          $ref: '#/components/schemas/OwnerResponse'
+        species:
+          $ref: '#/components/schemas/SpeciesResponse'
+        breed:
+          $ref: '#/components/schemas/BreedResponse'
+    StateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 50
+          minLength: 0
+        uf:
+          type: string
+          maxLength: 2
+          minLength: 2
+      required:
+      - name
+      - uf
+    SpeciesRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 50
+          minLength: 0
+      required:
+      - name
+    SubscriptionRequest:
+      type: object
+      properties:
+        petId:
+          type: integer
+          format: int64
+        planId:
+          type: integer
+          format: int64
+        paymentMethod:
+          type: string
+          enum:
+          - CREDIT_CARD
+          - DEBIT_CARD
+          - BOLETO
+          - PIX
+      required:
+      - paymentMethod
+      - petId
+      - planId
+    SubscriptionResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        startDate:
+          type: string
+          format: date
+        contractedValue:
+          type: number
+        pet:
+          $ref: '#/components/schemas/PetResponse'
+        plan:
+          $ref: '#/components/schemas/PlanResponse'
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - PENDING
+        paymentMethod:
+          type: string
+          enum:
+          - CREDIT_CARD
+          - DEBIT_CARD
+          - BOLETO
+          - PIX
+    CityRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+          minLength: 0
+        stateId:
+          type: integer
+          format: int64
+      required:
+      - name
+      - stateId
+    ChangePlanRequest:
+      type: object
+      properties:
+        planId:
+          type: integer
+          format: int64
+        paymentMethod:
+          type: string
+          enum:
+          - CREDIT_CARD
+          - DEBIT_CARD
+          - BOLETO
+          - PIX
+      required:
+      - planId
+    SubscriptionSimulationRequest:
+      type: object
+      properties:
+        planId:
+          type: integer
+          format: int64
+        paymentMethod:
+          type: string
+          enum:
+          - CREDIT_CARD
+          - DEBIT_CARD
+          - BOLETO
+          - PIX
+      required:
+      - paymentMethod
+      - planId
+    SubscriptionSimulationResponse:
+      type: object
+      properties:
+        baseValue:
+          type: number
+        discountRate:
+          type: number
+        discountAmount:
+          type: number
+        finalValue:
+          type: number
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          minLength: 1
+        password:
+          type: string
+          minLength: 1
+      required:
+      - email
+      - password
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+    ChangeStatusRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - PENDING
+      required:
+      - status
+    Pageable:
+      type: object
+      properties:
+        page:
+          type: integer
+          format: int32
+          minimum: 0
+        size:
+          type: integer
+          format: int32
+          minimum: 1
+        sort:
+          type: array
+          items:
+            type: string
+    PageOwnerResponse:
+      type: object
+      properties:
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        size:
+          type: integer
+          format: int32
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/OwnerResponse'
+        number:
+          type: integer
+          format: int32
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        first:
+          type: boolean
+        last:
+          type: boolean
+        numberOfElements:
+          type: integer
+          format: int32
+        empty:
+          type: boolean
+    PageableObject:
+      type: object
+      properties:
+        paged:
+          type: boolean
+        pageNumber:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+        offset:
+          type: integer
+          format: int64
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        unpaged:
+          type: boolean
+    SortObject:
+      type: object
+      properties:
+        sorted:
+          type: boolean
+        empty:
+          type: boolean
+        unsorted:
+          type: boolean
+    RevenueReportResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Row'
+        grandTotal:
+          type: number
+    Row:
+      type: object
+      properties:
+        lineType:
+          type: string
+        planName:
+          type: string
+        status:
+          type: string
+        quantity:
+          type: integer
+          format: int64
+        amount:
+          type: number
+    JsonNode:
+      type: object
+      properties:
+        nodeType:
+          type: string
+          enum:
+          - ARRAY
+          - BINARY
+          - BOOLEAN
+          - MISSING
+          - 'NULL'
+          - NUMBER
+          - OBJECT
+          - POJO
+          - STRING
+        string:
+          type: boolean
+        integralNumber:
+          type: boolean
+        missingNode:
+          type: boolean
+        valueNode:
+          type: boolean
+        container:
+          type: boolean
+        object:
+          type: boolean
+        pojo:
+          type: boolean
+        floatingPointNumber:
+          type: boolean
+        short:
+          type: boolean
+        int:
+          type: boolean
+        long:
+          type: boolean
+        double:
+          type: boolean
+        bigDecimal:
+          type: boolean
+        bigInteger:
+          type: boolean
+        textual:
+          type: boolean
+          deprecated: true
+        boolean:
+          type: boolean
+        binary:
+          type: boolean
+        array:
+          type: boolean
+        empty:
+          type: boolean
+        'null':
+          type: boolean
+        float:
+          type: boolean
+        number:
+          type: boolean
+        embeddedValue:
+          type: boolean
+    SubscriptionReportResponse:
+      type: object
+      properties:
+        items:
+          $ref: '#/components/schemas/JsonNode'
+        totalCount:
+          type: integer
+          format: int64
+    PagePetResponse:
+      type: object
+      properties:
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        size:
+          type: integer
+          format: int32
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/PetResponse'
+        number:
+          type: integer
+          format: int32
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        first:
+          type: boolean
+        last:
+          type: boolean
+        numberOfElements:
+          type: integer
+          format: int32
+        empty:
+          type: boolean
+    PageSubscriptionResponse:
+      type: object
+      properties:
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        size:
+          type: integer
+          format: int32
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/SubscriptionResponse'
+        number:
+          type: integer
+          format: int32
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        first:
+          type: boolean
+        last:
+          type: boolean
+        numberOfElements:
+          type: integer
+          format: int32
+        empty:
+          type: boolean
+  securitySchemes:
+    BearerAuth:
+      type: http
+      description: Insira o token JWT retornado no login (apenas o token, sem o prefixo Bearer)
+      name: BearerAuth
+      scheme: bearer
+      bearerFormat: JWT

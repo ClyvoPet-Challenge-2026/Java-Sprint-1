@@ -21,7 +21,7 @@ As APIs Java e .NET trabalham com partes complementares do domínio. A Java mant
 
 Na versão atual da .NET, estão implementados o CRUD de clínicas, as consultas de estados e cidades e a criação e consulta de agendamentos com isolamento por tutor. A auditoria de alterações em clínicas usa MongoDB Atlas. Lembretes ainda não têm endpoints implementados.
 
-Para conhecer a versão mobile e sua apresentação visual, acesse o repositório **Clyvo-Care**. As instruções de frontend deste README são para o **ClyvoCare Web**, a interface de apoio à entrega de Java Advanced. As duas interfaces correspondem a entregas distintas: frontend em Java Advanced e aplicativo em Mobile Application Development, conforme o enunciado da Sprint 3.
+O **Clyvo-Care** é a interface mobile que integra os fluxos das duas APIs e será usada na demonstração do projeto. O **ClyvoCare Web** permanece como referência da interface web da Sprint 3. A Sprint 4 pede a demonstração da aplicação online, de seus fluxos e da integração entre as matérias; este README não estabelece a publicação de um site separado como etapa obrigatória adicional.
 
 ## API publicada na Azure
 
@@ -33,7 +33,9 @@ Para conhecer a versão mobile e sua apresentação visual, acesse o repositóri
 
 A Java usa Oracle FIAP remoto e emite os JWTs aceitos também pela API .NET. O deploy é nativo em um Web App Linux Java 17, no grupo `rm561584`, compartilhando um plano B2 com a .NET. O MongoDB Atlas pertence ao contexto de auditoria/importação da .NET; a Java não precisa de uma conexão MongoDB.
 
-A pipeline [clyvocare-java](https://dev.azure.com/RM561584/Sprint%204%20%E2%80%93%20Azure%20DevOps/_build?definitionId=1) publica automaticamente após build, testes e geração do artefato na `master`. A execução [6](https://dev.azure.com/RM561584/Sprint%204%20%E2%80%93%20Azure%20DevOps/_build/results?buildId=6) concluiu CI e CD com sucesso. Na validação integrada de 02/11/2026, foram confirmados login, uso do JWT na .NET, contratações e relatórios com os packages Oracle. Consulte a execução mais recente para conferir o estado atual do deploy.
+A pipeline [clyvocare-java](https://dev.azure.com/RM561584/Sprint%204%20%E2%80%93%20Azure%20DevOps/_build?definitionId=1) publica automaticamente após build, testes e geração do artefato na `master`. A execução [7](https://dev.azure.com/RM561584/Sprint%204%20%E2%80%93%20Azure%20DevOps/_build/results?buildId=7) concluiu CI e CD com sucesso. Na validação integrada de 02/11/2026, foram confirmados login, uso do JWT na .NET, contratações e relatórios com os packages Oracle. O cancelamento também foi conferido: OWNER recebeu `403` e a assinatura permaneceu ativa; ADMIN conseguiu encerrá-la. Consulte a execução mais recente para conferir o estado atual do deploy.
+
+A `develop` concentra o desenvolvimento. A `master` dispara o CI/CD exigido em DevOps; a `main` e as tags identificam as versões de entrega. Uma tag registra o commit da versão, sem executar outro provisionamento.
 
 ## Como executar
 
@@ -96,11 +98,11 @@ Depois da inicialização, os endereços são:
 | `http://localhost:8080/swagger-ui.html` | Documentação interativa |
 | `http://localhost:8080/v3/api-docs` | Contrato OpenAPI em JSON |
 
-A raiz da API não é uma página de apresentação. Para navegar pelos fluxos da entrega de Java Advanced, inicie também a interface web descrita abaixo. As instruções da versão mobile ficam no repositório [Clyvo-Care](https://github.com/ClyvoPet-Challenge-2026/Clyvo-Care).
+A raiz da API não é uma página de apresentação. Para navegar pelos fluxos integrados do projeto, use o aplicativo [Clyvo-Care](https://github.com/ClyvoPet-Challenge-2026/Clyvo-Care), configurado com as APIs publicadas. A interface web descrita abaixo é uma referência da Sprint 3.
 
-### Acessando a camada de visualização de Java Advanced
+### Interface web de referência da Sprint 3
 
-Em outro terminal, clone o [ClyvoCare Web](https://github.com/ClyvoPet-Challenge-2026/Java-Sprint-1-Web). Essa interface React/Vite consome a API Java para demonstrar login, pets e contratações. Você precisa de Node.js compatível com o Vite atual do projeto, por exemplo Node 22.12 ou superior, e npm.
+Se quiser executar essa referência, clone o [ClyvoCare Web](https://github.com/ClyvoPet-Challenge-2026/Java-Sprint-1-Web) em outro terminal. Essa interface React/Vite consome a API Java para demonstrar login, pets e contratações. Você precisa de Node.js compatível com o Vite atual do projeto, por exemplo Node 22.12 ou superior, e npm.
 
 ```bash
 git clone https://github.com/ClyvoPet-Challenge-2026/Java-Sprint-1-Web.git
