@@ -650,11 +650,13 @@ Outros arquivos úteis:
 | [infra/appservice.json](infra/appservice.json) | Plano B2, dois Web Apps e configurações protegidas |
 | [azure-pipelines.yml](azure-pipelines.yml) | CI/CD da API Java no Azure DevOps |
 
-## Quality Assurance: testes JUnit
+## Quality Assurance: plano e automação
 
 O [plano manual no Azure Boards](https://dev.azure.com/RM561336/CHALLENGE%20-%20CLYVO%20CARE/_workitems/edit/183) descreve objetivos, entradas, saídas esperadas e passos dos dez casos da Sprint 4.
 
-Para a demonstração de automação, usamos [OwnerSecurityTests](src/test/java/br/com/fiap/ClyvoCareAPI/auth/OwnerSecurityTests.java), com JUnit Jupiter, Spring Boot e MockMvc. A classe verifica login, isolamento entre tutores, permissões de assinatura, CRUD de pets e valores de contratação. No Git Bash, na raiz deste repositório:
+A demonstração de QA usa a [coleção Postman publicada na develop da .NET](https://github.com/ClyvoPet-Challenge-2026/.Net-Sprint-1/tree/develop/qa/postman), executada com Newman nas duas APIs Azure: [vídeo de automação](https://www.youtube.com/watch?v=ypkzUlo0T_k).
+
+Na Java, complementamos essa regressão com [OwnerSecurityTests](src/test/java/br/com/fiap/ClyvoCareAPI/auth/OwnerSecurityTests.java), usando JUnit Jupiter, Spring Boot e MockMvc. A classe verifica login, isolamento entre tutores, permissões de assinatura, CRUD de pets e valores de contratação. No Git Bash, na raiz deste repositório:
 
 ```bash
 bash ./mvnw -Dtest=OwnerSecurityTests test
@@ -663,8 +665,6 @@ bash ./mvnw -Dtest=OwnerSecurityTests test
 Na execução de 03/11/2026, passaram 25 testes, sem falhas, erros ou testes ignorados. O Maven grava o resumo e o XML em `target/surefire-reports/`.
 
 Os testes criam contas e recursos controlados em H2 em memória, usam chaves RSA temporárias e revertem os dados. A aplicação publicada continua usando Oracle FIAP; essa suíte não acessa o banco de produção.
-
-Vídeo de automação de QA: **A PREENCHER APÓS A GRAVAÇÃO**.
 
 ## Relação com a Sprint 3
 
