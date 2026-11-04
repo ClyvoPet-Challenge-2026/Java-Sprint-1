@@ -19,7 +19,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/racas")
 @RequiredArgsConstructor
-@Tag(name = "Raças", description = "CRUD das raças vinculadas a uma espécie (Labrador, Persa, etc)")
+@Tag(name = "Raças", description = "CRUD das raças teste pipeline a uma espécie (Labrador, Persa, etc)")
 public class BreedController {
     private final BreedService breedService;
 
